@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { RotateCcw, SearchX, SlidersHorizontal } from 'lucide-react'
 import ProductCard from './ProductCard'
 import { Butterfly } from './Logo'
+import { getAvailableStock } from '../lib/format'
 import { COLLECTION_OPTIONS, SORT_OPTIONS, TYPE_OPTIONS } from '../data/catalogOptions'
 
 const EMPTY_FILTERS = {
@@ -50,7 +51,7 @@ export default function ProductGrid({
       result = result.filter((product) => product.subcategoria === activeFilters.subcategoria)
     }
     if (activeFilters.onlyAvailable) {
-      result = result.filter((product) => Number(product.stock) > 0)
+      result = result.filter((product) => getAvailableStock(product) > 0)
     }
     if (query) {
       result = result.filter((product) =>
@@ -71,6 +72,22 @@ export default function ProductGrid({
         break
       case 'name':
         result.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+        break
+      case 'best-sellers':
+        result.sort(
+          (a, b) =>
+            Number(b.ventas) - Number(a.ventas)
+            || Number(b.solicitudes) - Number(a.solicitudes)
+            || new Date(b.created_at) - new Date(a.created_at),
+        )
+        break
+      case 'most-requested':
+        result.sort(
+          (a, b) =>
+            Number(b.solicitudes) - Number(a.solicitudes)
+            || Number(b.ventas) - Number(a.ventas)
+            || new Date(b.created_at) - new Date(a.created_at),
+        )
         break
       default:
         result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))

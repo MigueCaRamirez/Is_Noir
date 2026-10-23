@@ -1,9 +1,6 @@
-import { useEffect, useState } from 'react'
 import { ArrowRight, Newspaper, Sparkles } from 'lucide-react'
 import ProductCard from '../components/ProductCard'
 import { Butterfly } from '../components/Logo'
-import { formatDate, resolveProductImage } from '../lib/format'
-import { fetchPublicNews } from '../services/newsService'
 
 function SectionHeading({ eyebrow, title, copy }) {
   return (
@@ -31,62 +28,48 @@ function ProductSkeletons() {
   )
 }
 
+function EmptyState({ title, copy }) {
+  return (
+    <div className="novedades-empty">
+      <Sparkles size={24} strokeWidth={1.1} />
+      <h3>{title}</h3>
+      <p>{copy}</p>
+    </div>
+  )
+}
+
 export default function NovedadesPage({
   products = [],
   loading = false,
   error = '',
-  errorDetail = '',
   onRetry,
   onSelectProduct,
   onExplore,
+  onOpenNews,
 }) {
-  const [news, setNews] = useState([])
-  const [newsLoading, setNewsLoading] = useState(true)
-  const [newsError, setNewsError] = useState('')
-  const [expandedNews, setExpandedNews] = useState(() => new Set())
-
-  useEffect(() => {
-    let active = true
-
-    async function loadNews() {
-      setNewsLoading(true)
-      setNewsError('')
-      try {
-        const data = await fetchPublicNews()
-        if (active) setNews(data)
-      } catch {
-        if (active) {
-          setNewsError('El diario del atelier está tomando un respiro. Vuelve pronto.')
-        }
-      } finally {
-        if (active) setNewsLoading(false)
-      }
-    }
-
-    loadNews()
-    return () => {
-      active = false
-    }
-  }, [])
-
   const latest = products
     .filter((product) => product.es_novedad)
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 8)
   const latestFallback = latest.length ? latest : products.slice(0, 4)
+
   const mostRequested = [...products]
     .filter((product) => Number(product.solicitudes) > 0)
-    .sort((a, b) => Number(b.solicitudes) - Number(a.solicitudes))
+    .sort(
+      (a, b) =>
+        Number(b.solicitudes) - Number(a.solicitudes)
+        || Number(b.ventas) - Number(a.ventas),
+    )
     .slice(0, 4)
 
-  const toggleNews = (id) => {
-    setExpandedNews((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const bestSellers = [...products]
+    .filter((product) => Number(product.ventas) > 0)
+    .sort(
+      (a, b) =>
+        Number(b.ventas) - Number(a.ventas)
+        || Number(b.solicitudes) - Number(a.solicitudes),
+    )
+    .slice(0, 4)
 
   return (
     <div className="page page--novedades">
@@ -99,8 +82,8 @@ export default function NovedadesPage({
             </h1>
           </div>
           <p className="page-masthead__copy">
-            Recién llegados, piezas que se están volviendo favoritas y las
-            historias que se escriben dentro de IS NOIR.
+            Recién llegados y piezas que el atelier elige destacar. Cada semana,
+            una nueva forma de habitar IS NOIR.
           </p>
         </div>
       </header>
@@ -123,11 +106,6 @@ export default function NovedadesPage({
               <Butterfly className="catalog-message__butterfly" />
               <h3>El atelier está tomando un respiro</h3>
               <p>{error}</p>
-              {errorDetail ? (
-                <p className="catalog-message__technical">
-                  Detalle técnico (solo administrador): {errorDetail}
-                </p>
-              ) : null}
               {onRetry ? (
                 <button type="button" className="button-outline" onClick={onRetry}>
                   Reintentar
@@ -156,11 +134,10 @@ export default function NovedadesPage({
                   ))}
                 </div>
               ) : (
-                <div className="novedades-empty">
-                  <Sparkles size={24} strokeWidth={1.1} />
-                  <h3>Las novedades están en camino.</h3>
-                  <p>Muy pronto verás aquí las primeras piezas de esta temporada.</p>
-                </div>
+                <EmptyState
+                  title="Las novedades están en camino."
+                  copy="Muy pronto verás aquí las primeras piezas de esta temporada."
+                />
               )}
             </div>
           </section>
@@ -170,7 +147,7 @@ export default function NovedadesPage({
               <SectionHeading
                 eyebrow="Las favoritas"
                 title="Lo más solicitado"
-                copy="Las piezas que más han pedido y que ya son parte del imaginario IS NOIR."
+                copy="La lista se escribe sola: cada vez que una pieza se abre o se consulta, su historia suma."
               />
               {mostRequested.length ? (
                 <div className="product-grid">
@@ -183,92 +160,61 @@ export default function NovedadesPage({
                   ))}
                 </div>
               ) : (
-                <div className="novedades-empty">
-                  <Sparkles size={24} strokeWidth={1.1} />
-                  <h3>Las favoritas aún se están escribiendo.</h3>
-                  <p>Cuando una pieza se vuelva imprescindible, la verás aquí.</p>
+                <EmptyState
+                  title="Las favoritas aún se están escribiendo."
+                  copy="Cuando una pieza se vuelva imprescindible, la verás aquí."
+                />
+              )}
+            </div>
+          </section>
+
+          <section className="novedades-section novedades-section--bestsellers">
+            <div className="container-wide">
+              <SectionHeading
+                eyebrow="Ya encontraron su lugar"
+                title="Lo más vendido"
+                copy="Piezas confirmadas por el atelier. El orden se actualiza automáticamente con cada venta."
+              />
+              {bestSellers.length ? (
+                <div className="product-grid">
+                  {bestSellers.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onSelect={onSelectProduct}
+                    />
+                  ))}
                 </div>
+              ) : (
+                <EmptyState
+                  title="Las primeras ventas están por llegar."
+                  copy="En cuanto una pieza encuentre su casa, aparecerá en esta selección."
+                />
               )}
             </div>
           </section>
         </>
       )}
 
-      <section className="novedades-news" aria-labelledby="novedades-news-title">
-        <div className="container-wide">
-          <div className="novedades-news__head">
-            <div>
-              <span className="eyebrow eyebrow--light eyebrow--rule">El diario del atelier</span>
-              <h2 id="novedades-news-title" className="section-title">
-                Noticias <em>IS NOIR</em>
-              </h2>
-            </div>
-            <Newspaper className="novedades-news__mark" size={48} strokeWidth={0.9} />
+      <section className="novedades-journal" aria-labelledby="novedades-journal-title">
+        <div className="container-wide novedades-journal__inner">
+          <div>
+            <span className="eyebrow eyebrow--light eyebrow--rule">El diario del atelier</span>
+            <h2 id="novedades-journal-title" className="section-title">
+              Historias <em>de la maison</em>
+            </h2>
+            <p>
+              Procesos, inspiraciones y pequeños rituales. La colección también
+              se cuenta en palabras.
+            </p>
           </div>
-
-          {newsLoading ? (
-            <div className="novedades-news__state">
-              <span className="shimmer novedades-news__loading" />
-              <span className="shimmer novedades-news__loading novedades-news__loading--short" />
-            </div>
-          ) : newsError ? (
-            <div className="novedades-news__state">
-              <p>{newsError}</p>
-            </div>
-          ) : news.length ? (
-            <div className="novedades-news__grid">
-              {news.map((item) => {
-                const isOpen = expandedNews.has(item.id)
-                return (
-                  <article
-                    key={item.id}
-                    className={`news-card ${isOpen ? 'is-open' : ''}`}
-                  >
-                    {item.imagen_url ? (
-                      <div className="news-card__media">
-                        <img
-                          src={resolveProductImage(item.imagen_url)}
-                          alt=""
-                          loading="lazy"
-                        />
-                      </div>
-                    ) : (
-                      <div className="news-card__media news-card__media--mark" aria-hidden="true">
-                        <Butterfly />
-                      </div>
-                    )}
-                    <div className="news-card__body">
-                      <span className="news-card__date">{formatDate(item.created_at)}</span>
-                      <h3>{item.titulo}</h3>
-                      <p className="news-card__summary">{item.resumen}</p>
-                      <p className="news-card__content">{item.contenido}</p>
-                      {item.contenido?.length > item.resumen?.length ? (
-                        <button
-                          type="button"
-                          className="text-button"
-                          aria-expanded={isOpen}
-                          onClick={() => toggleNews(item.id)}
-                        >
-                          {isOpen ? 'Leer menos' : 'Leer noticia'}
-                          <ArrowRight
-                            size={14}
-                            strokeWidth={1.4}
-                            className={isOpen ? 'is-rotated' : ''}
-                          />
-                        </button>
-                      ) : null}
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="novedades-news__state">
-              <Sparkles size={22} strokeWidth={1.1} />
-              <h3>El diario abre pronto.</h3>
-              <p>El atelier está preparando sus próximas historias.</p>
-            </div>
-          )}
+          <div className="novedades-journal__actions">
+            <Newspaper size={38} strokeWidth={0.9} />
+            <button type="button" className="button-primary button-primary--light" onClick={onOpenNews}>
+              Leer el Diario del Atelier
+              <ArrowRight size={16} strokeWidth={1.4} />
+            </button>
+          </div>
         </div>
       </section>
 

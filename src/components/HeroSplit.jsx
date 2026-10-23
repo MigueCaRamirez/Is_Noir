@@ -34,7 +34,7 @@ export default function HeroSplit({ onExplore }) {
       <article className="hero-panel hero-panel--old">
         <img
           src={assetUrl('hero-old-money.jpg')}
-          alt="Mujer elegante disfrutando un café en una terraza clásica"
+          alt="Mujer elegante en una terraza clásica"
           className="hero-panel__image"
           fetchPriority="high"
         />

@@ -24,6 +24,15 @@ function normalizeImageUrl(value) {
   return imagenUrl
 }
 
+function normalizeExpiration(value) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    throw new Error('La fecha de expiración no es válida.')
+  }
+  return date.toISOString()
+}
+
 export function sanitizeNews(payload) {
   const titulo = cleanText(payload.titulo, 160)
   const resumen = cleanText(payload.resumen, 320)
@@ -38,6 +47,7 @@ export function sanitizeNews(payload) {
     contenido,
     imagen_url: normalizeImageUrl(payload.imagen_url),
     publicada: Boolean(payload.publicada),
+    fecha_expiracion: normalizeExpiration(payload.fecha_expiracion),
   }
 }
 
@@ -58,11 +68,23 @@ export function getNewsErrorMessage(error) {
 
 export async function fetchPublicNews() {
   const client = getClient()
-  const { data, error } = await client
+  const now = new Date().toISOString()
+  let { data, error } = await client
     .from('noticias')
-    .select('id, created_at, titulo, resumen, contenido, imagen_url')
+    .select('id, created_at, titulo, resumen, contenido, imagen_url, fecha_expiracion')
     .eq('publicada', true)
+    .or(`fecha_expiracion.is.null,fecha_expiracion.gt.${now}`)
     .order('created_at', { ascending: false })
+
+  if (error && /fecha_expiracion/i.test(error.message ?? '')) {
+    const fallback = await client
+      .from('noticias')
+      .select('id, created_at, titulo, resumen, contenido, imagen_url')
+      .eq('publicada', true)
+      .order('created_at', { ascending: false })
+    data = fallback.data
+    error = fallback.error
+  }
 
   if (error) throw new Error(getNewsErrorMessage(error))
   return data ?? []

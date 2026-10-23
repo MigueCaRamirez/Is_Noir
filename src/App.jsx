@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Navbar from './components/Navbar'
 import ProductModal from './components/ProductModal'
 import Footer from './components/Footer'
+import FloatingLinks from './components/FloatingLinks'
 import CartDrawer from './components/CartDrawer'
 import AdminLoginModal, { AccessDeniedDialog } from './components/AdminLoginModal'
 import AdminDashboard from './components/AdminDashboard'
@@ -9,9 +10,12 @@ import HomePage from './pages/HomePage'
 import CollectionPage from './pages/CollectionPage'
 import AboutPage from './pages/AboutPage'
 import NovedadesPage from './pages/NovedadesPage'
+import NoticiasPage from './pages/NoticiasPage'
 import { useAuth } from './context/AuthContext'
 import { useCart } from './context/CartContext'
+import { supabase } from './lib/supabaseClient'
 import { fetchPublicProducts } from './services/productService'
+import { fetchSizeGuides } from './services/sizeGuideService'
 import { COLLECTION_THEMES } from './data/catalogOptions'
 
 const EMPTY_FILTERS = {
@@ -27,13 +31,15 @@ const ROUTES = {
   collection: '/coleccion',
   about: '/nosotros',
   novedades: '/novedades',
+  news: '/noticias',
 }
 
 const PAGE_TITLES = {
-  [ROUTES.home]: 'IS NOIR · Boutique · Café · Accessoires',
+  [ROUTES.home]: 'IS NOIR · Boutique · Accessoires',
   [ROUTES.collection]: 'La colección · IS NOIR',
   [ROUTES.about]: 'Sobre nosotros · IS NOIR',
   [ROUTES.novedades]: 'Novedades · IS NOIR',
+  [ROUTES.news]: 'Diario del Atelier · IS NOIR',
 }
 
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '')
@@ -66,10 +72,14 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [adminLoginOpen, setAdminLoginOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [sizeGuides, setSizeGuides] = useState(null)
 
-  const page = [ROUTES.collection, ROUTES.about, ROUTES.novedades].includes(route)
+  const page = [ROUTES.collection, ROUTES.about, ROUTES.novedades, ROUTES.news].includes(route)
     ? route
     : ROUTES.home
+  const activeProduct = selectedProduct
+    ? products.find((product) => product.id === selectedProduct.id) || selectedProduct
+    : null
   const theme =
     page === ROUTES.collection
       ? COLLECTION_THEMES[filters.collection] || 'split'
@@ -121,24 +131,85 @@ export default function App() {
     document.title = PAGE_TITLES[page] || PAGE_TITLES[ROUTES.home]
   }, [page])
 
-  const loadProducts = useCallback(async () => {
-    setCatalogLoading(true)
-    setCatalogError('')
+  const loadProducts = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setCatalogLoading(true)
     try {
       const data = await fetchPublicProducts()
       setProducts(data)
+      setCatalogError('')
     } catch (error) {
-      setCatalogError(
-        error.message || 'No pudimos cargar la colección en este momento.',
-      )
+      if (!silent) {
+        setCatalogError(
+          error.message || 'No pudimos cargar la colección en este momento.',
+        )
+      }
     } finally {
-      setCatalogLoading(false)
+      if (!silent) setCatalogLoading(false)
+    }
+  }, [])
+
+  const loadSizeGuides = useCallback(async () => {
+    try {
+      const data = await fetchSizeGuides()
+      setSizeGuides(data)
+    } catch {
+      // Las guías locales de respaldo siguen disponibles en el modal.
     }
   }, [])
 
   useEffect(() => {
     loadProducts()
-  }, [loadProducts])
+    loadSizeGuides()
+  }, [loadProducts, loadSizeGuides])
+
+  useEffect(() => {
+    if (!supabase) return undefined
+
+    let reloadTimer = null
+    let guidesTimer = null
+    const scheduleProducts = () => {
+      window.clearTimeout(reloadTimer)
+      reloadTimer = window.setTimeout(() => loadProducts({ silent: true }), 280)
+    }
+    const scheduleGuides = () => {
+      window.clearTimeout(guidesTimer)
+      guidesTimer = window.setTimeout(() => loadSizeGuides(), 280)
+    }
+
+    const channel = supabase
+      .channel('isnoir-public-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'productos' },
+        scheduleProducts,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'guias_tallas' },
+        scheduleGuides,
+      )
+      .subscribe()
+
+    const onAvailabilityChange = () => scheduleProducts()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') loadProducts({ silent: true })
+    }
+    const pollTimer = window.setInterval(() => {
+      loadProducts({ silent: true })
+    }, 60000)
+
+    window.addEventListener('isnoir:availability-changed', onAvailabilityChange)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      window.clearTimeout(reloadTimer)
+      window.clearTimeout(guidesTimer)
+      window.clearInterval(pollTimer)
+      window.removeEventListener('isnoir:availability-changed', onAvailabilityChange)
+      document.removeEventListener('visibilitychange', onVisibility)
+      supabase.removeChannel(channel)
+    }
+  }, [loadProducts, loadSizeGuides])
 
   useEffect(() => {
     const root = document.documentElement
@@ -248,9 +319,14 @@ export default function App() {
             products={products}
             loading={catalogLoading}
             error={publicCatalogError}
-            errorDetail={catalogErrorDetail}
-            onRetry={loadProducts}
+            onRetry={() => loadProducts()}
             onSelectProduct={setSelectedProduct}
+            onExplore={() => openCollection()}
+            onOpenNews={() => navigate(ROUTES.news)}
+          />
+        ) : page === ROUTES.news ? (
+          <NoticiasPage
+            onNavigate={navigate}
             onExplore={() => openCollection()}
           />
         ) : page === ROUTES.collection ? (
@@ -259,7 +335,7 @@ export default function App() {
             loading={catalogLoading}
             error={publicCatalogError}
             errorDetail={catalogErrorDetail}
-            onRetry={loadProducts}
+            onRetry={() => loadProducts()}
             filters={filters}
             onFiltersChange={setFilters}
             searchQuery={searchQuery}
@@ -281,8 +357,15 @@ export default function App() {
         onOpenCollections={openCollections}
       />
 
-      <ProductModal product={selectedProduct} onClose={closeProduct} />
-      <CartDrawer />
+      <FloatingLinks />
+
+      <ProductModal
+        key={activeProduct?.id ?? 'closed'}
+        product={activeProduct}
+        sizeGuide={sizeGuides?.[activeProduct?.tipo]}
+        onClose={closeProduct}
+      />
+      <CartDrawer onGoToShop={() => openCollection({}, { section: 'tienda' })} />
 
       {adminLoginOpen ? (
         <AdminLoginModal onClose={() => setAdminLoginOpen(false)} />
@@ -291,7 +374,7 @@ export default function App() {
       {adminOpen && isAdmin ? (
         <AdminDashboard
           onClose={() => setAdminOpen(false)}
-          onCatalogChanged={loadProducts}
+          onCatalogChanged={() => loadProducts({ silent: true })}
         />
       ) : null}
 

@@ -6,6 +6,8 @@ export const TYPE_OPTIONS = ['Todo', ...PRODUCT_TYPES]
 
 export const SORT_OPTIONS = [
   { value: 'recent', label: 'Más recientes' },
+  { value: 'best-sellers', label: 'Más vendidos' },
+  { value: 'most-requested', label: 'Más solicitados' },
   { value: 'price-asc', label: 'Precio: menor a mayor' },
   { value: 'price-desc', label: 'Precio: mayor a menor' },
   { value: 'name', label: 'Alfabético' },

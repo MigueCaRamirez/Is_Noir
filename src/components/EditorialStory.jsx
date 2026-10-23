@@ -7,7 +7,7 @@ export function StoryBand({ onExplore }) {
     <section id="nosotros" className="story-band" aria-label="La historia detrás de IS NOIR">
       <img
         src={assetUrl('editorial-mujer.jpg')}
-        alt="Mujer elegante en una terraza de café"
+        alt="Mujer elegante en una terraza clásica"
         loading="lazy"
         className="story-band__image"
       />

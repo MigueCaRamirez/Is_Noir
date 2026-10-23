@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "IS NOIR — Boutique · Café · Accessoires. E-commerce editorial con inventario y pedidos por WhatsApp.",
+  "description": "IS NOIR — Boutique y accesorios. E-commerce editorial con inventario y pedidos por WhatsApp.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

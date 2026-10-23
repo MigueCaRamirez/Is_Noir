@@ -1,10 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ImagePlus, LoaderCircle, Lock, Sparkles, UploadCloud, X } from 'lucide-react'
+import {
+  ImagePlus,
+  Link2,
+  LoaderCircle,
+  Lock,
+  Sparkles,
+  Trash2,
+  UploadCloud,
+  X,
+} from 'lucide-react'
 import { PRODUCT_COLLECTIONS, PRODUCT_TYPES } from '../data/catalogOptions'
-import { resolveProductImage } from '../lib/format'
+import { getProductImages, resolveProductImage } from '../lib/format'
 import { createProduct, updateProduct } from '../services/productService'
-import { uploadProductImage, validateProductImage } from '../services/storageService'
+import {
+  deleteProductImageByUrl,
+  uploadProductImage,
+  validateProductImage,
+} from '../services/storageService'
 
 const DEFAULT_FORM = {
   nombre: '',
@@ -13,14 +26,23 @@ const DEFAULT_FORM = {
   coleccion: 'Old Money',
   tipo: 'Ropa',
   subcategoria: '',
-  imagen_url: '',
   borrador: false,
   es_novedad: false,
-  solicitudes: '0',
+}
+
+const MAX_IMAGES = 5
+
+function normalizeImageInput(value) {
+  const image = String(value ?? '').trim().replace(/^\/+/, '')
+  if (!image) return ''
+  if (/^https?:\/\//i.test(image)) return image
+  if (/^images\/[a-zA-Z0-9._-]+$/.test(image)) return image
+  throw new Error('Usa una URL https:// o una ruta local de images/.')
 }
 
 export default function AdminProductForm({ initialProduct = null, onSaved, onCancel }) {
   const isEditing = Boolean(initialProduct?.id)
+  const initialImages = useMemo(() => getProductImages(initialProduct), [initialProduct])
   const [form, setForm] = useState(() => ({
     ...DEFAULT_FORM,
     ...(initialProduct
@@ -31,29 +53,26 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
           coleccion: initialProduct.coleccion ?? 'Old Money',
           tipo: initialProduct.tipo ?? 'Ropa',
           subcategoria: initialProduct.subcategoria ?? '',
-          imagen_url: initialProduct.imagen_url ?? '',
           borrador: Boolean(initialProduct.borrador),
           es_novedad: Boolean(initialProduct.es_novedad),
-          solicitudes: String(initialProduct.solicitudes ?? 0),
         }
       : {}),
   }))
-  const [imageFile, setImageFile] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState(initialProduct?.imagen_url ?? '')
+  const [images, setImages] = useState(initialImages)
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [imageUrlDraft, setImageUrlDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  const selectedPreview = useMemo(() => {
-    if (!imageFile) return form.imagen_url || ''
-    return previewUrl
-  }, [imageFile, previewUrl, form.imagen_url])
+  const pendingRef = useRef([])
+  const removedImagesRef = useRef(new Set())
 
   useEffect(() => {
-    if (!imageFile) return undefined
-    const objectUrl = URL.createObjectURL(imageFile)
-    setPreviewUrl(objectUrl)
-    return () => URL.revokeObjectURL(objectUrl)
-  }, [imageFile])
+    pendingRef.current = pendingFiles
+  }, [pendingFiles])
+
+  useEffect(() => () => {
+    pendingRef.current.forEach((entry) => URL.revokeObjectURL(entry.preview))
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -63,21 +82,78 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onCancel, saving])
 
+  const totalImages = images.length + pendingFiles.length
+
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }))
     setError('')
   }
 
-  const handleImage = (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  const handleFiles = (event) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    if (!files.length) return
+
+    const remaining = MAX_IMAGES - totalImages
+    if (remaining <= 0) {
+      setError('Ya tienes 5 imágenes. Elimina una antes de añadir otra.')
+      return
+    }
+
+    const accepted = []
+    for (const file of files.slice(0, remaining)) {
+      try {
+        validateProductImage(file)
+        accepted.push({
+          key: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+          file,
+          preview: URL.createObjectURL(file),
+        })
+      } catch (imageError) {
+        setError(imageError.message)
+      }
+    }
+
+    if (files.length > remaining) {
+      setError('Puedes guardar hasta 5 imágenes por pieza.')
+    }
+
+    if (accepted.length) setPendingFiles((current) => [...current, ...accepted])
+  }
+
+  const removePending = (key) => {
+    setPendingFiles((current) => {
+      const target = current.find((entry) => entry.key === key)
+      if (target) URL.revokeObjectURL(target.preview)
+      return current.filter((entry) => entry.key !== key)
+    })
+    setError('')
+  }
+
+  const removeExisting = (url) => {
+    setImages((current) => current.filter((image) => image !== url))
+    removedImagesRef.current.add(url)
+    setError('')
+  }
+
+  const addImageUrl = () => {
+    if (totalImages >= MAX_IMAGES) {
+      setError('Puedes guardar hasta 5 imágenes por pieza.')
+      return
+    }
     try {
-      validateProductImage(file)
-      setImageFile(file)
+      const image = normalizeImageInput(imageUrlDraft)
+      if (!image) return
+      if (images.includes(image)) {
+        setError('Esa imagen ya está en la selección.')
+        return
+      }
+      setImages((current) => [...current, image])
+      removedImagesRef.current.delete(image)
+      setImageUrlDraft('')
       setError('')
-    } catch (imageError) {
-      event.target.value = ''
-      setError(imageError.message)
+    } catch (urlError) {
+      setError(urlError.message)
     }
   }
 
@@ -87,7 +163,6 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
 
     const precio = Number(form.precio)
     const stock = Number(form.stock)
-    const solicitudes = Number(form.solicitudes)
 
     if (!form.nombre.trim()) {
       setError('Escribe el nombre de la pieza.')
@@ -101,18 +176,20 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
       setError('El stock debe ser un número entero mayor o igual a cero.')
       return
     }
-    if (!Number.isInteger(solicitudes) || solicitudes < 0) {
-      setError('Las solicitudes deben ser un número entero mayor o igual a cero.')
+    if (totalImages > MAX_IMAGES) {
+      setError('Puedes guardar hasta 5 imágenes por pieza.')
       return
     }
 
     setSaving(true)
     try {
-      let imagenUrl = form.imagen_url
-      if (imageFile) {
-        const uploaded = await uploadProductImage(imageFile)
-        imagenUrl = uploaded.publicUrl
-      }
+      const uploaded = await Promise.all(
+        pendingFiles.map((entry) => uploadProductImage(entry.file)),
+      )
+      const nextImages = [
+        ...images,
+        ...uploaded.map((entry) => entry.publicUrl),
+      ].slice(0, MAX_IMAGES)
 
       const payload = {
         nombre: form.nombre,
@@ -121,15 +198,21 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
         coleccion: form.coleccion,
         tipo: form.tipo,
         subcategoria: form.subcategoria,
-        imagen_url: imagenUrl,
+        imagenes_urls: nextImages,
+        imagen_url: nextImages[0] || null,
         borrador: form.borrador,
         es_novedad: form.es_novedad,
-        solicitudes,
       }
 
       const saved = isEditing
         ? await updateProduct(initialProduct.id, payload)
         : await createProduct(payload)
+
+      for (const removedUrl of removedImagesRef.current) {
+        if (!nextImages.includes(removedUrl)) {
+          deleteProductImageByUrl(removedUrl).catch(() => {})
+        }
+      }
 
       onSaved?.(saved)
     } catch (submitError) {
@@ -193,18 +276,6 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
               </label>
 
               <label className="admin-field">
-                <span>Solicitudes / ventas</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={form.solicitudes}
-                  onChange={(event) => updateField('solicitudes', event.target.value)}
-                />
-                <small>Se usa para ordenar lo más solicitado en Novedades.</small>
-              </label>
-
-              <label className="admin-field">
                 <span>Colección *</span>
                 <select value={form.coleccion} onChange={(event) => updateField('coleccion', event.target.value)}>
                   {PRODUCT_COLLECTIONS.map((collection) => (
@@ -233,41 +304,100 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
                 />
               </label>
 
-              <label className="admin-field admin-field--wide">
-                <span>URL de imagen (se completa al subir un archivo)</span>
-                <input
-                  type="text"
-                  value={form.imagen_url}
-                  onChange={(event) => updateField('imagen_url', event.target.value)}
-                  placeholder="https://... o images/producto.jpg"
-                />
-              </label>
+              <div className="admin-field admin-field--wide">
+                <span>Fotos de la pieza · máximo 5</span>
+                <div className="admin-image-grid">
+                  {images.map((image, index) => (
+                    <div className="admin-image-card" key={image}>
+                      <img src={resolveProductImage(image)} alt={`Foto ${index + 1}`} />
+                      {index === 0 ? <span className="admin-image-card__cover">Portada</span> : null}
+                      <button
+                        type="button"
+                        className="admin-image-card__remove"
+                        onClick={() => removeExisting(image)}
+                        aria-label={`Eliminar foto ${index + 1}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                  {pendingFiles.map((entry, index) => (
+                    <div className="admin-image-card" key={entry.key}>
+                      <img src={entry.preview} alt={`Foto nueva ${index + 1}`} />
+                      <span className="admin-image-card__cover">Nueva</span>
+                      <button
+                        type="button"
+                        className="admin-image-card__remove"
+                        onClick={() => removePending(entry.key)}
+                        aria-label={`Eliminar foto nueva ${index + 1}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                  {totalImages < MAX_IMAGES ? (
+                    <label className="admin-image-add">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp,image/avif"
+                        onChange={handleFiles}
+                      />
+                      <ImagePlus size={22} strokeWidth={1.2} />
+                      <strong>Añadir fotos</strong>
+                      <small>{totalImages}/5</small>
+                    </label>
+                  ) : null}
+                </div>
+                <small className="admin-field__hint">
+                  La primera foto será la portada. Puedes subir varias a la vez y eliminar cada una antes de guardar.
+                </small>
+              </div>
+
+              <div className="admin-image-url admin-field--wide">
+                <label className="admin-field">
+                  <span>Añadir imagen por URL</span>
+                  <input
+                    type="text"
+                    value={imageUrlDraft}
+                    onChange={(event) => {
+                      setImageUrlDraft(event.target.value)
+                      setError('')
+                    }}
+                    placeholder="https://... o images/producto.jpg"
+                  />
+                </label>
+                <button type="button" className="admin-button admin-button--ghost" onClick={addImageUrl}>
+                  <Link2 size={14} />
+                  Añadir
+                </button>
+              </div>
             </div>
 
             <div className="admin-form__visual">
-              <span className="admin-field__label">Imagen de producto</span>
-              <label className={`admin-upload ${selectedPreview ? 'has-image' : ''}`}>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/avif"
-                  onChange={handleImage}
-                />
-                {selectedPreview ? (
-                  <>
-                    <img src={resolveProductImage(selectedPreview)} alt="Vista previa del producto" />
-                    <span className="admin-upload__change">
-                      <ImagePlus size={16} />
-                      Reemplazar imagen
-                    </span>
-                  </>
+              <span className="admin-field__label">Vista previa de portada</span>
+              <div className={`admin-upload admin-upload--preview ${totalImages ? 'has-image' : ''}`}>
+                {images[0] || pendingFiles[0] ? (
+                  <img
+                    src={images[0] ? resolveProductImage(images[0]) : pendingFiles[0].preview}
+                    alt="Vista previa de la pieza"
+                  />
                 ) : (
                   <span className="admin-upload__empty">
                     <UploadCloud size={28} strokeWidth={1.2} />
-                    <strong>Subir imagen</strong>
+                    <strong>Sin foto todavía</strong>
                     <small>JPG, PNG, WebP o AVIF · máx. 6 MB</small>
                   </span>
                 )}
-              </label>
+              </div>
+
+              <div className="admin-form__metrics">
+                <span><strong>{String(initialProduct?.solicitudes ?? 0)}</strong> solicitudes</span>
+                <span><strong>{String(initialProduct?.ventas ?? 0)}</strong> vendidas</span>
+              </div>
+              <small className="admin-field__hint">
+                Solicitudes y ventas se calculan automáticamente con la actividad de la tienda y los apartados confirmados.
+              </small>
 
               <label className="admin-draft-toggle">
                 <input

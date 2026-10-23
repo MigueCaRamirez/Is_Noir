@@ -71,7 +71,7 @@ export default function Logo({
     <span className={`brand brand--${size} brand--${tone} ${className}`.trim()}>
       <img
         src={assetUrl('logo-is-noir.png')}
-        alt="IS NOIR, boutique, café y accesorios"
+        alt="IS NOIR, boutique y accesorios"
         className="brand__logo"
         draggable="false"
         decoding="async"

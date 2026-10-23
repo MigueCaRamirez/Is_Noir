@@ -14,13 +14,37 @@ function cleanText(value, maxLength = 160) {
   return String(value ?? '').trim().slice(0, maxLength)
 }
 
+function normalizeImageUrl(value) {
+  const image = cleanText(value, 2000).replace(/^\/+/, '')
+  if (!image) return null
+  const isRemoteImage = /^https?:\/\//i.test(image)
+  const isLocalImage = /^images\/[a-zA-Z0-9._-]+$/.test(image)
+  if (!isRemoteImage && !isLocalImage) {
+    throw new Error('Cada imagen debe ser una URL pública o una ruta local de images/.')
+  }
+  return image
+}
+
+function normalizeImages(payload) {
+  const raw = Array.isArray(payload.imagenes_urls) && payload.imagenes_urls.length
+    ? payload.imagenes_urls
+    : [payload.imagen_url].filter(Boolean)
+
+  const normalized = raw
+    .map((image) => normalizeImageUrl(image))
+    .filter(Boolean)
+  const unique = [...new Set(normalized)]
+
+  if (unique.length > 5) {
+    throw new Error('Puedes guardar hasta 5 imágenes por pieza.')
+  }
+  return unique
+}
+
 export function sanitizeProduct(payload) {
   const precio = Number(payload.precio)
   const stock = Number(payload.stock)
-  const solicitudes = Number(payload.solicitudes ?? 0)
-  const imagenUrl = cleanText(payload.imagen_url, 2000).replace(/^\/+/, '')
-  const isRemoteImage = /^https?:\/\//i.test(imagenUrl)
-  const isLocalImage = /^images\/[a-zA-Z0-9._-]+$/.test(imagenUrl)
+  const images = normalizeImages(payload)
 
   if (!cleanText(payload.nombre)) {
     throw new Error('El nombre del producto es obligatorio.')
@@ -31,17 +55,11 @@ export function sanitizeProduct(payload) {
   if (!Number.isInteger(stock) || stock < 0) {
     throw new Error('El stock debe ser un entero igual o mayor a cero.')
   }
-  if (!Number.isInteger(solicitudes) || solicitudes < 0) {
-    throw new Error('Las solicitudes deben ser un entero igual o mayor a cero.')
-  }
   if (!PRODUCT_COLLECTIONS.includes(payload.coleccion)) {
     throw new Error('Selecciona una colección válida.')
   }
   if (!PRODUCT_TYPES.includes(payload.tipo)) {
     throw new Error('Selecciona un tipo de producto válido.')
-  }
-  if (imagenUrl && !isRemoteImage && !isLocalImage) {
-    throw new Error('La imagen debe ser una URL pública o una ruta local de images/.')
   }
 
   return {
@@ -51,16 +69,21 @@ export function sanitizeProduct(payload) {
     coleccion: payload.coleccion,
     tipo: payload.tipo,
     subcategoria: cleanText(payload.subcategoria, 80) || null,
-    imagen_url: imagenUrl || null,
+    imagen_url: images[0] || null,
+    imagenes_urls: images,
     borrador: Boolean(payload.borrador),
     es_novedad: Boolean(payload.es_novedad),
-    solicitudes: Math.trunc(solicitudes),
   }
 }
 
 export function getProductErrorMessage(error) {
   if (!error) return 'Ocurrió un error inesperado.'
-  if (error.code === '42501' || error.code === 'PGRST301' || error.status === 401 || error.status === 403) {
+  if (
+    error.code === '42501' ||
+    error.code === 'PGRST301' ||
+    error.status === 401 ||
+    error.status === 403
+  ) {
     return 'Tu cuenta no tiene permisos para realizar esta acción.'
   }
   if (error.code === 'PGRST116') return 'No se encontró el producto solicitado.'
@@ -71,11 +94,21 @@ export function getProductErrorMessage(error) {
 
 export async function fetchPublicProducts() {
   const client = getClient()
-  const { data, error } = await client
-    .from('productos')
+  let { data, error } = await client
+    .from('productos_publicos')
     .select('*')
-    .eq('borrador', false)
     .order('created_at', { ascending: false })
+
+  // Compatibilidad mientras se aplica la migración del esquema.
+  if (error && (error.code === '42P01' || /productos_publicos/i.test(error.message ?? ''))) {
+    const fallback = await client
+      .from('productos')
+      .select('*')
+      .eq('borrador', false)
+      .order('created_at', { ascending: false })
+    data = fallback.data
+    error = fallback.error
+  }
 
   if (error) throw new Error(getProductErrorMessage(error))
   return data ?? []

@@ -65,6 +65,10 @@ export function uploadNewsImage(file) {
   return uploadImage(file, 'noticias')
 }
 
+export function uploadSizeGuideImage(file) {
+  return uploadImage(file, 'guias-tallas')
+}
+
 export async function deleteProductImageByUrl(publicUrl) {
   if (!publicUrl) return
   const client = getClient()

@@ -12,6 +12,8 @@ import Logo, { Sparkle } from './Logo'
 const NAV_LINKS = [
   { label: 'Inicio', path: '/' },
   { label: 'Tienda', path: '/coleccion', shop: true },
+  { label: 'Novedades', path: '/novedades' },
+  { label: 'Atelier', path: '/noticias' },
   { label: 'Nosotros', path: '/nosotros' },
 ]
 
@@ -103,7 +105,7 @@ export default function Navbar({
         <div className="announcement-bar__inner">
           <span className="announcement-bar__edition">
             <Sparkle className="h-2.5 w-2.5" />
-            BOUTIQUE · CAFÉ · ACCESSOIRES
+            BOUTIQUE · ATELIER · ACCESSOIRES
             <Sparkle className="h-2.5 w-2.5" />
           </span>
           <span className="announcement-bar__script">Plus qu&apos;un style, une vibe ♥</span>
@@ -226,7 +228,7 @@ export default function Navbar({
                 type="search"
                 value={searchQuery}
                 onChange={(event) => onSearchChange?.(event.target.value)}
-                placeholder="Busca un vestido, un aroma, un detalle..."
+                placeholder="Busca un vestido, un accesorio, un detalle..."
                 aria-label="Buscar productos"
               />
               <button type="submit" className="search-drawer__submit">

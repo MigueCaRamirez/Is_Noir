@@ -7,10 +7,9 @@ import {
   Check,
   ChevronDown,
   CircleDollarSign,
-  ClipboardList,
+  Clock3,
   Eye,
   EyeOff,
-  ImagePlus,
   LoaderCircle,
   LogOut,
   Minus,
@@ -19,13 +18,14 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Ruler,
   Search,
   ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { formatCOP, formatDate, resolveProductImage } from '../lib/format'
+import { formatCOP, formatDate, formatDateTime, resolveProductImage } from '../lib/format'
 import {
   deleteProduct,
   fetchAdminProducts,
@@ -38,8 +38,11 @@ import {
   fetchAdminNews,
   setNewsPublished,
 } from '../services/newsService'
+import { fetchSizeGuides } from '../services/sizeGuideService'
 import AdminProductForm from './AdminProductForm'
 import AdminNewsForm from './AdminNewsForm'
+import AdminReservationsPanel from './AdminReservationsPanel'
+import AdminSizeGuideForm from './AdminSizeGuideForm'
 import Logo, { Butterfly } from './Logo'
 
 const STATUS_FILTERS = [
@@ -77,10 +80,12 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
   const [newsError, setNewsError] = useState('')
   const [newsBusyIds, setNewsBusyIds] = useState([])
   const [newsEditor, setNewsEditor] = useState({ open: false, item: null })
+  const [sizeGuides, setSizeGuides] = useState(null)
+  const [sizeGuideEditor, setSizeGuideEditor] = useState({ open: false, tipo: 'Ropa' })
 
-  const notify = (type, message) => {
+  const notify = useCallback((type, message) => {
     setNotice({ type, message })
-  }
+  }, [])
 
   useEffect(() => {
     if (!notice) return undefined
@@ -124,18 +129,35 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
     loadNews()
   }, [loadNews])
 
+  const loadSizeGuides = useCallback(async () => {
+    if (!isAdmin) return
+    const data = await fetchSizeGuides()
+    setSizeGuides(data)
+  }, [isAdmin])
+
+  useEffect(() => {
+    loadSizeGuides()
+  }, [loadSizeGuides])
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && !editor.open) onClose?.()
+      if (
+        event.key === 'Escape'
+        && !editor.open
+        && !newsEditor.open
+        && !sizeGuideEditor.open
+      ) {
+        onClose?.()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [onClose, editor.open])
+  }, [onClose, editor.open, newsEditor.open, sizeGuideEditor.open])
 
   const stats = useMemo(() => {
     const published = products.filter((product) => !product.borrador).length
@@ -257,7 +279,7 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
     try {
       const saved = await setNewsPublished(item.id, !item.publicada)
       setNews((current) => current.map((entry) => (entry.id === item.id ? saved : entry)))
-      notify('success', saved.publicada ? 'La noticia ya está publicada.' : 'La noticia volvió a borrador.')
+      notify('success', saved.publicada ? 'La entrada ya está visible en el Diario del Atelier.' : 'La entrada volvió a borrador.')
     } catch (error) {
       notify('error', error.message || 'No se pudo cambiar el estado de la noticia.')
     } finally {
@@ -294,12 +316,24 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
         : [saved, ...current]
     })
     setNewsEditor({ open: false, item: null })
-    notify('success', saved.publicada ? 'Noticia publicada en Novedades.' : 'Borrador de noticia guardado.')
+    notify('success', saved.publicada ? 'Entrada publicada en el Diario del Atelier.' : 'Borrador de noticia guardado.')
+  }
+
+  const openSizeGuide = (tipo) => setSizeGuideEditor({ open: true, tipo })
+
+  const handleSizeGuideSaved = (saved) => {
+    setSizeGuides((current) => ({
+      ...(current ?? {}),
+      [saved.tipo]: { ...(current?.[saved.tipo] ?? {}), ...saved },
+    }))
+    setSizeGuideEditor({ open: false, tipo: 'Ropa' })
+    notify('success', `Guía de tallas de ${saved.tipo.toLowerCase()} actualizada.`)
   }
 
   const refreshAll = () => {
     loadProducts()
     loadNews()
+    loadSizeGuides()
   }
 
   const handleLogout = async () => {
@@ -366,6 +400,14 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
             accent
           />
         </section>
+
+        <AdminReservationsPanel
+          onCatalogChanged={() => {
+            loadProducts()
+            onCatalogChanged?.()
+          }}
+          notify={notify}
+        />
 
         <section className="admin-inventory">
           <div className="admin-inventory__head">
@@ -462,7 +504,7 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
                         </strong>
                         <span>{product.tipo} · {product.subcategoria || 'Sin categoría'} · {formatCOP(product.precio)}</span>
                         <small>
-                          {formatDate(product.created_at)} · {Number(product.solicitudes) || 0} solicitudes
+                          {formatDate(product.created_at)} · {Number(product.solicitudes) || 0} solicitudes · {Number(product.ventas) || 0} vendidas
                         </small>
                       </div>
                     </div>
@@ -526,15 +568,65 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
           )}
         </section>
 
+        <section className="admin-guides" aria-labelledby="admin-guides-title">
+          <div className="admin-inventory__head">
+            <div>
+              <span className="admin-kicker">Medidas de la maison</span>
+              <h2 id="admin-guides-title">Guías de tallas</h2>
+              <p className="admin-guides__copy">
+                La tienda abre esta información desde cada pieza según su categoría.
+              </p>
+            </div>
+          </div>
+
+          <div className="admin-guides__grid">
+            {['Ropa', 'Accesorios'].map((tipo) => {
+              const guide = sizeGuides?.[tipo]
+              return (
+                <article className="admin-guide-card" key={tipo}>
+                  <div className="admin-guide-card__icon">
+                    <Ruler size={20} strokeWidth={1.2} />
+                  </div>
+                  <div className="admin-guide-card__body">
+                    <span className="admin-kicker">{tipo}</span>
+                    <h3>{guide?.titulo || `Guía de tallas · ${tipo}`}</h3>
+                    <p>
+                      {String(guide?.texto ?? '').trim().slice(0, 170)
+                        || 'Añade medidas, recomendaciones o una infografía para esta categoría.'}
+                      {String(guide?.texto ?? '').length > 170 ? '…' : ''}
+                    </p>
+                    <small>
+                      {guide?.imagen_url ? 'Incluye infografía' : 'Solo texto'}
+                      {' · '}
+                      Actualizada {guide?.updated_at ? formatDateTime(guide.updated_at) : 'desde el atelier'}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    className="admin-button admin-button--ghost"
+                    onClick={() => openSizeGuide(tipo)}
+                  >
+                    <Pencil size={14} />
+                    Editar guía
+                  </button>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+
         <section className="admin-news" aria-labelledby="admin-news-title">
           <div className="admin-inventory__head">
             <div>
-              <span className="admin-kicker">Diario del atelier</span>
-              <h2 id="admin-news-title">Noticias</h2>
+              <span className="admin-kicker">Noticias · Atelier</span>
+              <h2 id="admin-news-title">Diario del Atelier</h2>
+              <p className="admin-guides__copy">
+                Publica historias con vigencia opcional. Las entradas vencidas se archivan solas.
+              </p>
             </div>
             <button type="button" className="admin-button admin-button--primary" onClick={openNewNews}>
               <Plus size={15} />
-              Nueva noticia
+              Nueva entrada
             </button>
           </div>
 
@@ -566,8 +658,15 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
             <div className="admin-news-grid">
               {news.map((item) => {
                 const busy = newsBusyIds.includes(item.id)
+                const expired = Boolean(
+                  item.fecha_expiracion
+                  && new Date(item.fecha_expiracion).getTime() <= Date.now(),
+                )
                 return (
-                  <article className={`admin-news-card ${item.publicada ? '' : 'is-draft'}`} key={item.id}>
+                  <article
+                    className={`admin-news-card ${item.publicada ? '' : 'is-draft'} ${expired ? 'is-expired' : ''}`}
+                    key={item.id}
+                  >
                     <div className="admin-news-card__media">
                       {item.imagen_url ? (
                         <img src={resolveProductImage(item.imagen_url)} alt="" loading="lazy" />
@@ -579,17 +678,35 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
                       <div className="admin-news-card__meta">
                         <button
                           type="button"
-                          className={`status-toggle ${item.publicada ? 'is-published' : ''}`}
+                          className={`status-toggle ${item.publicada && !expired ? 'is-published' : ''}`}
                           onClick={() => handleNewsPublished(item)}
                           disabled={busy}
                         >
-                          {item.publicada ? <Eye size={13} /> : <EyeOff size={13} />}
-                          {item.publicada ? 'Publicada' : 'Borrador'}
+                          {item.publicada && expired ? (
+                            <Clock3 size={13} />
+                          ) : item.publicada ? (
+                            <Eye size={13} />
+                          ) : (
+                            <EyeOff size={13} />
+                          )}
+                          {item.publicada && expired ? 'Expirada' : item.publicada ? 'Publicada' : 'Borrador'}
                         </button>
                         <span>{formatDate(item.created_at)}</span>
                       </div>
                       <h3>{item.titulo}</h3>
                       <p>{item.resumen}</p>
+                      {item.fecha_expiracion ? (
+                        <small className="admin-news-card__expiration">
+                          <Clock3 size={12} />
+                          {expired ? 'Dejó de mostrarse el ' : 'Se ocultará el '}
+                          {formatDateTime(item.fecha_expiracion)}
+                        </small>
+                      ) : (
+                        <small className="admin-news-card__expiration">
+                          <Clock3 size={12} />
+                          Sin fecha de expiración
+                        </small>
+                      )}
                       <div className="admin-news-card__actions">
                         <button type="button" className="admin-icon-button" onClick={() => openNewsEdit(item)} aria-label={`Editar ${item.titulo}`}>
                           <Pencil size={15} strokeWidth={1.4} />
@@ -640,6 +757,16 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
           initialNews={newsEditor.item}
           onSaved={handleNewsSaved}
           onCancel={() => setNewsEditor({ open: false, item: null })}
+        />
+      ) : null}
+
+      {sizeGuideEditor.open ? (
+        <AdminSizeGuideForm
+          key={sizeGuideEditor.tipo}
+          tipo={sizeGuideEditor.tipo}
+          guide={sizeGuides?.[sizeGuideEditor.tipo]}
+          onSaved={handleSizeGuideSaved}
+          onCancel={() => setSizeGuideEditor({ open: false, tipo: 'Ropa' })}
         />
       ) : null}
     </div>,

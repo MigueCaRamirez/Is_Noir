@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  CalendarClock,
   Eye,
   EyeOff,
   ImagePlus,
@@ -9,7 +10,7 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react'
-import { resolveProductImage } from '../lib/format'
+import { formatDateTime, resolveProductImage } from '../lib/format'
 import { createNews, updateNews } from '../services/newsService'
 import { uploadNewsImage, validateProductImage } from '../services/storageService'
 
@@ -19,6 +20,15 @@ const DEFAULT_FORM = {
   contenido: '',
   imagen_url: '',
   publicada: true,
+  fecha_expiracion: '',
+}
+
+function toLocalInput(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
 }
 
 export default function AdminNewsForm({ initialNews = null, onSaved, onCancel }) {
@@ -32,6 +42,7 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
           contenido: initialNews.contenido ?? '',
           imagen_url: initialNews.imagen_url ?? '',
           publicada: Boolean(initialNews.publicada),
+          fecha_expiracion: toLocalInput(initialNews.fecha_expiracion),
         }
       : {}),
   }))
@@ -44,6 +55,12 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
     if (!imageFile) return form.imagen_url || ''
     return previewUrl
   }, [imageFile, previewUrl, form.imagen_url])
+
+  const expiresInPast = useMemo(() => {
+    if (!form.fecha_expiracion) return false
+    const date = new Date(form.fecha_expiracion)
+    return !Number.isNaN(date.getTime()) && date.getTime() <= Date.now()
+  }, [form.fecha_expiracion])
 
   useEffect(() => {
     if (!imageFile) return undefined
@@ -90,6 +107,10 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
       setError('Escribe el contenido de la noticia.')
       return
     }
+    if (form.fecha_expiracion && Number.isNaN(new Date(form.fecha_expiracion).getTime())) {
+      setError('La fecha de expiración no es válida.')
+      return
+    }
 
     setSaving(true)
     try {
@@ -105,6 +126,9 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
         contenido: form.contenido,
         imagen_url: imagenUrl,
         publicada: form.publicada,
+        fecha_expiracion: form.fecha_expiracion
+          ? new Date(form.fecha_expiracion).toISOString()
+          : null,
       }
 
       const saved = isEditing
@@ -130,10 +154,10 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
         <header className="admin-form-shell__head">
           <div>
             <span className="admin-kicker">
-              {isEditing ? 'Editar noticia' : 'Nueva noticia'}
+              {isEditing ? 'Editar entrada' : 'Nueva entrada'}
             </span>
             <h2 id="admin-news-form-title">
-              {isEditing ? initialNews.titulo : 'Publicar en el diario'}
+              {isEditing ? initialNews.titulo : 'Diario del Atelier'}
             </h2>
           </div>
           <button
@@ -163,7 +187,7 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
               </label>
 
               <label className="admin-field admin-field--wide">
-                <span>Resumen</span>
+                <span>Resumen editorial</span>
                 <textarea
                   value={form.resumen}
                   onChange={(event) => updateField('resumen', event.target.value)}
@@ -171,6 +195,7 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
                   maxLength={320}
                   rows={2}
                 />
+                <small className="admin-field__hint">{form.resumen.length}/320 caracteres</small>
               </label>
 
               <label className="admin-field admin-field--wide">
@@ -178,11 +203,14 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
                 <textarea
                   value={form.contenido}
                   onChange={(event) => updateField('contenido', event.target.value)}
-                  placeholder="Escribe aquí la historia completa..."
+                  placeholder="Escribe la historia completa. Separa los párrafos con una línea en blanco."
                   maxLength={12000}
-                  rows={8}
+                  rows={9}
                   required
                 />
+                <small className="admin-field__hint">
+                  Se leerá como una pieza editorial. Una línea en blanco crea un nuevo párrafo.
+                </small>
               </label>
 
               <label className="admin-field admin-field--wide">
@@ -194,10 +222,26 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
                   placeholder="https://... o images/editorial.jpg"
                 />
               </label>
+
+              <label className="admin-field admin-field--wide">
+                <span>Fecha de expiración</span>
+                <input
+                  type="datetime-local"
+                  value={form.fecha_expiracion}
+                  onChange={(event) => updateField('fecha_expiracion', event.target.value)}
+                />
+                <small className={`admin-field__hint ${expiresInPast ? 'is-warning' : ''}`}>
+                  {form.fecha_expiracion
+                    ? expiresInPast
+                      ? `Esta entrada quedará fuera del diario de inmediato (${formatDateTime(form.fecha_expiracion)}).`
+                      : `Se ocultará automáticamente el ${formatDateTime(form.fecha_expiracion)}.`
+                    : 'Déjala vacía si la noticia no debe expirar.'}
+                </small>
+              </label>
             </div>
 
             <div className="admin-form__visual">
-              <span className="admin-field__label">Imagen de la noticia</span>
+              <span className="admin-field__label">Imagen destacada</span>
               <label className={`admin-upload ${selectedPreview ? 'has-image' : ''}`}>
                 <input
                   type="file"
@@ -228,15 +272,23 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
                   onChange={(event) => updateField('publicada', event.target.checked)}
                 />
                 <span>
-                  <strong>{form.publicada ? 'Noticia publicada' : 'Guardar como borrador'}</strong>
+                  <strong>{form.publicada ? 'Entrada publicada' : 'Guardar como borrador'}</strong>
                   <small>
                     {form.publicada
-                      ? 'Visible en la página de Novedades.'
+                      ? 'Visible en el Diario del Atelier mientras esté vigente.'
                       : 'Solo el equipo puede verla.'}
                   </small>
                 </span>
                 {form.publicada ? <Eye size={15} strokeWidth={1.4} /> : <EyeOff size={15} strokeWidth={1.4} />}
               </label>
+
+              <div className="admin-news-form__calendar">
+                <CalendarClock size={17} strokeWidth={1.3} />
+                <span>
+                  <strong>Control de vigencia</strong>
+                  <small>Las entradas vencidas dejan de mostrarse en la tienda, pero permanecen en el archivo del atelier.</small>
+                </span>
+              </div>
 
               <div className="admin-form__security">
                 <ShieldCheck size={13} strokeWidth={1.4} />
@@ -260,7 +312,7 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
                   Guardando…
                 </>
               ) : form.publicada ? (
-                isEditing ? 'Guardar noticia' : 'Publicar noticia'
+                isEditing ? 'Guardar entrada' : 'Publicar entrada'
               ) : (
                 'Guardar borrador'
               )}

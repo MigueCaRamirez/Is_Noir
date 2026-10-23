@@ -57,8 +57,8 @@ export default function Footer({
             <Logo size="md" tone="light" />
           </button>
           <p>
-            Boutique, café y accesorios. Una curaduría de piezas para habitar
-            lo clásico y lo alternativo sin pedir permiso.
+            Boutique y accesorios. Una curaduría de piezas para habitar lo
+            clásico y lo alternativo sin pedir permiso.
           </p>
           <a
             className="footer-whatsapp"
@@ -101,6 +101,15 @@ export default function Footer({
             Novedades
           </a>
           <a
+            href="/noticias"
+            onClick={(event) => {
+              event.preventDefault()
+              onNavigate?.('/noticias')
+            }}
+          >
+            Diario del Atelier
+          </a>
+          <a
             href="/#colecciones"
             onClick={(event) => {
               event.preventDefault()
@@ -122,7 +131,7 @@ export default function Footer({
 
         <div className="site-footer__column">
           <h3>Atención</h3>
-          <span>Envíos solo en Cúcuta</span>
+          <span>Envíos exclusivos en Cúcuta</span>
           <span>Pedidos asistidos por WhatsApp</span>
           <span>Cúcuta - Colombia</span>
         </div>
