@@ -1,0 +1,46 @@
+name: CI · Build & Secret Guard
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Verificar seguridad y compilar
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias reproducibles
+        run: npm ci
+
+      - name: Guardia anti-secretos
+        run: npm run security:secrets
+
+      - name: Compilar aplicación
+        run: npm run build
+
+      - name: Comprobar archivos ignorados sensibles
+        run: |
+          if git ls-files --error-unmatch .env.local > /dev/null 2>&1; then
+            echo "ERROR: .env.local está rastreado por Git"
+            exit 1
+          fi
+          echo "OK: .env.local no está en el repositorio"
