@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   Menu,
-  Search,
   ShoppingBag,
   UserRound,
   X,
@@ -17,12 +16,6 @@ const NAV_LINKS = [
   { label: 'Nosotros', path: '/nosotros' },
 ]
 
-const COLLECTION_CHOICES = [
-  { label: 'Todas las piezas', value: 'Todas' },
-  { label: 'Old Money', value: 'Old Money' },
-  { label: 'Alternativo', value: 'Alternativo' },
-]
-
 export default function Navbar({
   currentPath = '/',
   activeCollection = 'Todas',
@@ -32,14 +25,16 @@ export default function Navbar({
   onOpenAdmin,
   onOpenCollections,
   cartCount = 0,
-  searchQuery = '',
-  onSearchChange,
+  collections = ['Old Money', 'Alternativo'],
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [collectionOpen, setCollectionOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const searchInputRef = useRef(null)
   const collectionRef = useRef(null)
+
+  const collectionChoices = [
+    { label: 'Todas las piezas', value: 'Todas' },
+    ...collections.map((collection) => ({ label: collection, value: collection })),
+  ]
 
   useEffect(() => {
     if (!menuOpen) return undefined
@@ -49,10 +44,6 @@ export default function Navbar({
       document.body.style.overflow = previousOverflow
     }
   }, [menuOpen])
-
-  useEffect(() => {
-    if (searchOpen) searchInputRef.current?.focus()
-  }, [searchOpen])
 
   useEffect(() => {
     const closeOnOutsideClick = (event) => {
@@ -81,12 +72,6 @@ export default function Navbar({
     }
 
     onNavigate?.(link.path)
-  }
-
-  const submitSearch = (event) => {
-    event.preventDefault()
-    onOpenCollection?.({}, { keepSearch: true, section: 'tienda' })
-    setSearchOpen(false)
   }
 
   const openCollections = () => {
@@ -151,7 +136,7 @@ export default function Navbar({
               {collectionOpen ? (
                 <div className="collection-dropdown animate-scale-in">
                   <p className="collection-dropdown__title">Selecciona tu estilo</p>
-                  {COLLECTION_CHOICES.map((choice) => (
+                  {collectionChoices.map((choice) => (
                     <button
                       key={choice.value}
                       type="button"
@@ -184,15 +169,6 @@ export default function Navbar({
           <div className="header-actions">
             <button
               type="button"
-              className={`nav-icon ${searchOpen ? 'is-active' : ''}`}
-              aria-label="Buscar piezas"
-              aria-expanded={searchOpen}
-              onClick={() => setSearchOpen((open) => !open)}
-            >
-              <Search size={19} strokeWidth={1.5} />
-            </button>
-            <button
-              type="button"
               className="nav-icon nav-icon--account"
               aria-label="Acceso administración"
               onClick={accountAction}
@@ -218,33 +194,6 @@ export default function Navbar({
             </button>
           </div>
         </div>
-
-        {searchOpen ? (
-          <div className="search-drawer animate-fade-up">
-            <form className="search-drawer__form" onSubmit={submitSearch}>
-              <Search size={20} strokeWidth={1.4} aria-hidden="true" />
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={searchQuery}
-                onChange={(event) => onSearchChange?.(event.target.value)}
-                placeholder="Busca un vestido, un accesorio, un detalle..."
-                aria-label="Buscar productos"
-              />
-              <button type="submit" className="search-drawer__submit">
-                Ver resultados
-              </button>
-              <button
-                type="button"
-                className="search-drawer__close"
-                aria-label="Cerrar búsqueda"
-                onClick={() => setSearchOpen(false)}
-              >
-                <X size={18} />
-              </button>
-            </form>
-          </div>
-        ) : null}
       </header>
 
       {menuOpen ? (
@@ -272,7 +221,7 @@ export default function Navbar({
           </nav>
           <div className="mobile-menu__collections">
             <p className="eyebrow">Selecciona tu estilo</p>
-            {COLLECTION_CHOICES.map((choice) => (
+            {collectionChoices.map((choice) => (
               <button
                 key={choice.value}
                 type="button"

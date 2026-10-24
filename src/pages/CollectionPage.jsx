@@ -9,8 +9,10 @@ export default function CollectionPage({
   filters,
   onFiltersChange,
   searchQuery,
+  onSearchChange,
   onClearSearch,
   onSelectProduct,
+  taxonomies,
 }) {
   const collectionName = filters.collection === 'Todas' ? 'todas las piezas' : filters.collection
 
@@ -40,8 +42,10 @@ export default function CollectionPage({
         filters={filters}
         onFiltersChange={onFiltersChange}
         searchQuery={searchQuery}
+        onSearchChange={onSearchChange}
         onClearSearch={onClearSearch}
         onSelectProduct={onSelectProduct}
+        taxonomies={taxonomies}
       />
     </div>
   )
