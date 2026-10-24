@@ -1,11 +1,43 @@
-import { formatCOP, getProductImages, absoluteImageUrl } from '../lib/format'
+import { formatCOP, getProductImages, absoluteImageUrl, isSingleSize } from '../lib/format'
 
 const configuredPhone = String(import.meta.env.VITE_WHATSAPP_PHONE ?? '').replace(/\D/g, '')
 export const WHATSAPP_PHONE = configuredPhone || '573122597144'
 
-function imageLine(imageUrl, label = '📷 Ver foto') {
+function imageLine(imageUrl, label = '📷 Foto principal') {
   const url = absoluteImageUrl(imageUrl)
   return url ? `${label}: ${url}` : ''
+}
+
+function sizeBreakdown(items) {
+  const sizes = new Map()
+  for (const item of items) {
+    const size = String(item.talla ?? '').trim() || 'Única'
+    const quantity = Number(item.cantidad) || 1
+    sizes.set(size, (sizes.get(size) || 0) + quantity)
+  }
+  return [...sizes.entries()]
+    .map(([size, quantity]) => `${quantity}x Talla ${size}`)
+    .join(' · ')
+}
+
+function groupCartItems(items) {
+  const groups = new Map()
+  for (const item of items) {
+    const key = String(item.productoId ?? item.nombre ?? '')
+    if (!key) continue
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        nombre: item.nombre,
+        coleccion: item.coleccion,
+        precio: Number(item.precio) || 0,
+        image: getProductImages(item)[0] || item.imagen_url,
+        items: [],
+      })
+    }
+    groups.get(key).items.push(item)
+  }
+  return [...groups.values()]
 }
 
 export function buildWhatsAppUrl(items = [], { reservation = null } = {}) {
@@ -15,17 +47,25 @@ export function buildWhatsAppUrl(items = [], { reservation = null } = {}) {
     )}`
   }
 
-  const lines = items.flatMap((item) => {
-    const quantity = Number(item.cantidad) || 1
-    const collection = item.coleccion ? ` · Colección ${item.coleccion}` : ''
-    const size = item.talla ? ` · Talla ${item.talla}` : ''
-    const unit = formatCOP(item.precio)
-    const image = imageLine(getProductImages(item)[0] || item.imagen_url)
+  const groups = groupCartItems(items)
+  const lines = groups.flatMap((group) => {
+    const quantity = group.items.reduce(
+      (sum, item) => sum + (Number(item.cantidad) || 1),
+      0,
+    )
+    const groupTotal = group.items.reduce(
+      (sum, item) => sum + (Number(item.precio) || 0) * (Number(item.cantidad) || 1),
+      0,
+    )
+    const collection = group.coleccion ? ` · Colección ${group.coleccion}` : ''
+    const sizes = sizeBreakdown(group.items)
 
     return [
-      `• ${item.nombre}`,
-      `  ${quantity} x ${unit}${size}${collection} — ${formatCOP(Number(item.precio) * quantity)}`,
-      image,
+      `• ${group.nombre}`,
+      `  ${quantity} unidad(es)${collection}`,
+      sizes ? `  ${sizes}` : '',
+      `  Total: ${formatCOP(groupTotal)} COP`,
+      imageLine(group.image),
     ].filter(Boolean)
   })
 
@@ -57,19 +97,38 @@ export function buildWhatsAppUrl(items = [], { reservation = null } = {}) {
   return `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`
 }
 
-export function buildSingleProductWhatsAppUrl(product, { size = '', quantity = 1 } = {}) {
+export function buildSingleProductWhatsAppUrl(
+  product,
+  { size = '', quantity = 1, allocations = null } = {},
+) {
   if (!product) return buildWhatsAppUrl()
 
   const images = getProductImages(product)
-  const units = Math.max(1, Math.floor(Number(quantity) || 1))
+  const allocationEntries = Object.entries(allocations ?? {})
+    .map(([entrySize, entryQuantity]) => [entrySize, Number(entryQuantity) || 0])
+    .filter(([, entryQuantity]) => entryQuantity > 0)
+
+  const units = allocationEntries.length
+    ? allocationEntries.reduce((sum, [, entryQuantity]) => sum + entryQuantity, 0)
+    : Math.max(1, Math.floor(Number(quantity) || 1))
+
+  const sizes = allocationEntries.length
+    ? allocationEntries.map(([entrySize, entryQuantity]) => `${entryQuantity}x Talla ${entrySize}`).join(' · ')
+    : isSingleSize(product)
+      ? 'Talla única'
+      : size
+        ? `${units}x Talla ${size}`
+        : ''
+
+  const total = (Number(product.precio) || 0) * units
   const message = [
     'Hola IS NOIR ✨ Me interesa esta pieza:',
     '',
     `• ${product.nombre} — ${formatCOP(product.precio)} COP`,
     product.coleccion ? `Colección: ${product.coleccion}` : '',
     product.subcategoria ? `Categoría: ${product.subcategoria}` : '',
-    size ? `Talla: ${size}` : product.tipo === 'Ropa' ? 'Tallas disponibles: XS, S, M, L, XL' : 'Talla única',
-    units > 1 ? `Cantidad: ${units}` : '',
+    sizes,
+    `Total: ${formatCOP(total)} COP`,
     imageLine(images[0]),
     '',
     'Entregas locales únicamente en Cúcuta. ¿Sigue disponible?',
