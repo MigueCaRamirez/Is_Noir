@@ -4,6 +4,7 @@ import { Butterfly } from './Logo'
 import {
   formatCOP,
   getAvailableStock,
+  getImageFocus,
   getProductImages,
   resolveProductImage,
 } from '../lib/format'
@@ -15,6 +16,7 @@ export default function ProductCard({ product, onSelect }) {
   const stock = getAvailableStock(product)
   const lowStock = stock > 0 && stock <= 3
   const soldOut = stock === 0
+  const focus = getImageFocus(product)
 
   useEffect(() => {
     setActiveImage(0)
@@ -41,6 +43,7 @@ export default function ProductCard({ product, onSelect }) {
               alt={product.nombre}
               loading="lazy"
               className="product-card__image"
+              style={{ objectPosition: focus }}
             />
           ) : (
             <span className="product-card__placeholder">
@@ -74,7 +77,12 @@ export default function ProductCard({ product, onSelect }) {
                 aria-label={`Ver foto ${index + 1} de ${product.nombre}`}
                 aria-pressed={activeImage === index}
               >
-                <img src={resolveProductImage(image)} alt="" loading="lazy" />
+                <img
+                  src={resolveProductImage(image)}
+                  alt=""
+                  loading="lazy"
+                  style={{ objectPosition: focus }}
+                />
               </button>
             ))}
           </div>

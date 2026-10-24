@@ -16,6 +16,7 @@ import { useCart } from './context/CartContext'
 import { supabase } from './lib/supabaseClient'
 import { fetchPublicProducts } from './services/productService'
 import { fetchSizeGuides } from './services/sizeGuideService'
+import { emptyTaxonomies, fetchTaxonomies } from './services/taxonomyService'
 import { COLLECTION_THEMES } from './data/catalogOptions'
 
 const EMPTY_FILTERS = {
@@ -73,6 +74,7 @@ export default function App() {
   const [adminLoginOpen, setAdminLoginOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const [sizeGuides, setSizeGuides] = useState(null)
+  const [taxonomies, setTaxonomies] = useState(emptyTaxonomies)
 
   const page = [ROUTES.collection, ROUTES.about, ROUTES.novedades, ROUTES.news].includes(route)
     ? route
@@ -157,16 +159,27 @@ export default function App() {
     }
   }, [])
 
+  const loadTaxonomies = useCallback(async () => {
+    try {
+      const data = await fetchTaxonomies()
+      setTaxonomies(data)
+    } catch {
+      // El catálogo conserva los valores que ya traen los productos.
+    }
+  }, [])
+
   useEffect(() => {
     loadProducts()
     loadSizeGuides()
-  }, [loadProducts, loadSizeGuides])
+    loadTaxonomies()
+  }, [loadProducts, loadSizeGuides, loadTaxonomies])
 
   useEffect(() => {
     if (!supabase) return undefined
 
     let reloadTimer = null
     let guidesTimer = null
+    let taxonomiesTimer = null
     const scheduleProducts = () => {
       window.clearTimeout(reloadTimer)
       reloadTimer = window.setTimeout(() => loadProducts({ silent: true }), 280)
@@ -174,6 +187,10 @@ export default function App() {
     const scheduleGuides = () => {
       window.clearTimeout(guidesTimer)
       guidesTimer = window.setTimeout(() => loadSizeGuides(), 280)
+    }
+    const scheduleTaxonomies = () => {
+      window.clearTimeout(taxonomiesTimer)
+      taxonomiesTimer = window.setTimeout(() => loadTaxonomies(), 280)
     }
 
     const channel = supabase
@@ -188,11 +205,19 @@ export default function App() {
         { event: '*', schema: 'public', table: 'guias_tallas' },
         scheduleGuides,
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'taxonomias' },
+        scheduleTaxonomies,
+      )
       .subscribe()
 
     const onAvailabilityChange = () => scheduleProducts()
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') loadProducts({ silent: true })
+      if (document.visibilityState === 'visible') {
+        loadProducts({ silent: true })
+        loadTaxonomies()
+      }
     }
     const pollTimer = window.setInterval(() => {
       loadProducts({ silent: true })
@@ -204,12 +229,13 @@ export default function App() {
     return () => {
       window.clearTimeout(reloadTimer)
       window.clearTimeout(guidesTimer)
+      window.clearTimeout(taxonomiesTimer)
       window.clearInterval(pollTimer)
       window.removeEventListener('isnoir:availability-changed', onAvailabilityChange)
       document.removeEventListener('visibilitychange', onVisibility)
       supabase.removeChannel(channel)
     }
-  }, [loadProducts, loadSizeGuides])
+  }, [loadProducts, loadSizeGuides, loadTaxonomies])
 
   useEffect(() => {
     const root = document.documentElement
@@ -235,6 +261,39 @@ export default function App() {
   useEffect(() => {
     if (!authLoading && !isAdmin) setAdminOpen(false)
   }, [authLoading, isAdmin])
+
+  useEffect(() => {
+    const restoreAfterOAuth = (event) => {
+      if (event.type !== 'pageshow' || !event.persisted) return
+
+      setAdminLoginOpen(false)
+      document.body.style.overflow = ''
+
+      const storedScroll = sessionStorage.getItem('isnoir-oauth-scroll')
+      if (storedScroll !== null) {
+        sessionStorage.removeItem('isnoir-oauth-scroll')
+        const top = Number(storedScroll)
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: Number.isFinite(top) ? top : 0, behavior: 'auto' })
+        })
+      }
+    }
+
+    const onFocus = () => {
+      // Si el navegador volvió de Google sin disparar pageshow, liberamos
+      // cualquier bloqueo de scroll que haya quedado de la pantalla de acceso.
+      if (!document.querySelector('.modal-backdrop')) {
+        document.body.style.overflow = ''
+      }
+    }
+
+    window.addEventListener('pageshow', restoreAfterOAuth)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('pageshow', restoreAfterOAuth)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
 
   const openAdmin = useCallback(() => {
     if (isAdmin) {
@@ -307,8 +366,7 @@ export default function App() {
         onOpenAdmin={openAdmin}
         onOpenCollections={openCollections}
         cartCount={itemCount}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        collections={taxonomies.coleccion.map((item) => item.nombre)}
       />
 
       <main id="contenido">
@@ -339,8 +397,10 @@ export default function App() {
             filters={filters}
             onFiltersChange={setFilters}
             searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
             onClearSearch={() => setSearchQuery('')}
             onSelectProduct={setSelectedProduct}
+            taxonomies={taxonomies}
           />
         ) : (
           <HomePage

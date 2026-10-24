@@ -16,6 +16,18 @@ export const SORT_OPTIONS = [
 export const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL']
 export const SINGLE_SIZE = 'Única'
 
+export const IMAGE_FOCUS_OPTIONS = [
+  { value: 'center', label: 'Centro' },
+  { value: 'top', label: 'Arriba' },
+  { value: 'bottom', label: 'Abajo' },
+  { value: 'left', label: 'Izquierda' },
+  { value: 'right', label: 'Derecha' },
+  { value: 'top left', label: 'Arriba izquierda' },
+  { value: 'top right', label: 'Arriba derecha' },
+  { value: 'bottom left', label: 'Abajo izquierda' },
+  { value: 'bottom right', label: 'Abajo derecha' },
+]
+
 export const CATEGORY_SHOWCASE = [
   {
     label: 'Ropa',

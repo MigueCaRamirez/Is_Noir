@@ -98,7 +98,7 @@ function ReservationCard({ reservation, now, busy, onConfirm, onCancel }) {
   )
 }
 
-export default function AdminReservationsPanel({ onCatalogChanged, notify }) {
+export default function AdminReservationsPanel({ onCatalogChanged, notify, onActiveCountChange }) {
   const [reservations, setReservations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -188,6 +188,10 @@ export default function AdminReservationsPanel({ onCatalogChanged, notify }) {
       ).length,
     [reservations, now],
   )
+
+  useEffect(() => {
+    onActiveCountChange?.(activeCount)
+  }, [activeCount, onActiveCountChange])
 
   const markBusy = (id, busy) => {
     setBusyIds((current) =>

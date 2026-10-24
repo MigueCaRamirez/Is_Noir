@@ -42,6 +42,7 @@ export default function CartDrawer({ onGoToShop }) {
     clearCart,
     reservation,
     renewReservation,
+    releaseReservation,
   } = useCart()
 
   useEffect(() => {
@@ -77,10 +78,17 @@ export default function CartDrawer({ onGoToShop }) {
     ? { id: reservation.id, expiresAt: reservation.expiresAt }
     : null
   const whatsappUrl = buildWhatsAppUrl(items, { reservation: activeReservation })
-  const canReserveAgain = ['expired', 'error'].includes(reservation.status)
 
   const refreshReservation = () => {
     renewReservation()
+  }
+
+  const cancelReservation = async () => {
+    try {
+      await releaseReservation()
+    } catch {
+      // El mensaje se muestra dentro de la tarjeta del apartado.
+    }
   }
 
   return createPortal(
@@ -193,7 +201,19 @@ export default function CartDrawer({ onGoToShop }) {
                       Stock apartado
                     </span>
                     <strong>{formatCountdown(reservation.secondsLeft)}</strong>
-                    <small>Vence a las {reservationTime(reservation.expiresAt)}</small>
+                    <small>
+                      {reservation.syncing
+                        ? 'Actualizando el apartado…'
+                        : `Vence a las ${reservationTime(reservation.expiresAt)}`}
+                    </small>
+                    {reservation.error ? <small>{reservation.error}</small> : null}
+                    <button
+                      type="button"
+                      className="cart-reservation__release"
+                      onClick={cancelReservation}
+                    >
+                      Liberar apartado y conservar piezas
+                    </button>
                   </>
                 ) : reservation.status === 'syncing' ? (
                   <>
@@ -210,6 +230,30 @@ export default function CartDrawer({ onGoToShop }) {
                       El apartado expiró
                     </span>
                     <small>El stock volvió a la tienda. Renueva para continuar.</small>
+                  </>
+                ) : reservation.status === 'released' ? (
+                  <>
+                    <span className="cart-reservation__label">
+                      <Clock3 size={13} strokeWidth={1.4} />
+                      El atelier liberó el apartado
+                    </span>
+                    <small>Las piezas siguen en tu carrito. Puedes volver a apartarlas.</small>
+                  </>
+                ) : reservation.status === 'completed' ? (
+                  <>
+                    <span className="cart-reservation__label">
+                      <ShoppingBag size={13} strokeWidth={1.4} />
+                      Venta confirmada
+                    </span>
+                    <small>El atelier ya procesó este pedido. Gracias por elegir IS NOIR.</small>
+                  </>
+                ) : reservation.status === 'limit' ? (
+                  <>
+                    <span className="cart-reservation__label">
+                      <Clock3 size={13} strokeWidth={1.4} />
+                      Límite de apartados alcanzado
+                    </span>
+                    <small>{reservation.error}</small>
                   </>
                 ) : reservation.status === 'error' ? (
                   <>
@@ -228,11 +272,6 @@ export default function CartDrawer({ onGoToShop }) {
                     <small>Las piezas se reservan por 15 minutos.</small>
                   </>
                 )}
-                {canReserveAgain ? (
-                  <button type="button" className="cart-reservation__retry" onClick={refreshReservation}>
-                    Reintentar apartado
-                  </button>
-                ) : null}
               </div>
 
               <p className="cart-note">
@@ -250,6 +289,16 @@ export default function CartDrawer({ onGoToShop }) {
                   <MessageCircle size={18} strokeWidth={1.5} />
                   Finalizar pedido por WhatsApp
                 </a>
+              ) : reservation.status === 'limit' ? (
+                <button type="button" className="button-primary cart-whatsapp" disabled>
+                  <Clock3 size={17} strokeWidth={1.5} />
+                  Límite de apartados alcanzado
+                </button>
+              ) : reservation.status === 'completed' ? (
+                <button type="button" className="button-primary cart-whatsapp" disabled>
+                  <ShoppingBag size={17} strokeWidth={1.5} />
+                  Pedido confirmado
+                </button>
               ) : (
                 <button
                   type="button"
@@ -266,7 +315,7 @@ export default function CartDrawer({ onGoToShop }) {
                 </button>
               )}
 
-              {!activeReservation ? (
+              {!activeReservation && reservation.status !== 'completed' ? (
                 <a
                   className="cart-whatsapp-fallback"
                   href={whatsappUrl}

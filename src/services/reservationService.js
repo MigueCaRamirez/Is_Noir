@@ -1,7 +1,9 @@
 import { supabase } from '../lib/supabaseClient'
 
 const CART_TOKEN_KEY = 'isnoir-cart-token-v1'
-const RESERVATION_MINUTES = 15
+export const INITIAL_RESERVATION_MINUTES = 15
+export const RENEWAL_RESERVATION_MINUTES = 10
+export const FINAL_RESERVATION_MINUTES = 5
 
 function getClient() {
   if (!supabase) {
@@ -14,6 +16,9 @@ function publicReservationError(error) {
   const message = String(error?.message ?? '')
 
   if (/no hay stock suficiente/i.test(message)) {
+    return message
+  }
+  if (/la talla .* no est[áa] disponible|selecciona una talla/i.test(message)) {
     return message
   }
   if (/carrito est[áa] vac[íi]o/i.test(message)) {
@@ -70,7 +75,11 @@ function toReservationItems(items = []) {
     }))
 }
 
-export async function createReservation(cartToken, items, minutes = RESERVATION_MINUTES) {
+export async function createReservation(
+  cartToken,
+  items,
+  minutes = INITIAL_RESERVATION_MINUTES,
+) {
   const client = getClient()
   const payload = toReservationItems(items)
 
@@ -93,6 +102,18 @@ export async function createReservation(cartToken, items, minutes = RESERVATION_
     throw new Error('No pudimos apartar tus piezas en este momento. Inténtalo de nuevo.')
   }
   return data
+}
+
+export async function fetchReservationStatus(reservationId, cartToken) {
+  if (!reservationId || !cartToken) return null
+  const client = getClient()
+  const { data, error } = await client.rpc('estado_reserva', {
+    p_reserva_id: reservationId,
+    p_cart_token: cartToken,
+  })
+
+  if (error) return null
+  return data ?? null
 }
 
 export async function cancelReservation(reservationId, cartToken) {

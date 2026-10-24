@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
-import { RotateCcw, SearchX, SlidersHorizontal } from 'lucide-react'
+import { RotateCcw, Search, SearchX, SlidersHorizontal, X } from 'lucide-react'
 import ProductCard from './ProductCard'
 import { Butterfly } from './Logo'
 import { getAvailableStock } from '../lib/format'
-import { COLLECTION_OPTIONS, SORT_OPTIONS, TYPE_OPTIONS } from '../data/catalogOptions'
+import { SORT_OPTIONS } from '../data/catalogOptions'
 
 const EMPTY_FILTERS = {
   collection: 'Todas',
@@ -22,20 +22,33 @@ export default function ProductGrid({
   filters,
   onFiltersChange,
   searchQuery = '',
+  onSearchChange,
   onClearSearch,
   onSelectProduct,
+  taxonomies = null,
 }) {
   const activeFilters = { ...EMPTY_FILTERS, ...filters }
 
+  const collections = useMemo(() => {
+    const configured = (taxonomies?.coleccion ?? []).map((item) => item.nombre)
+    const used = products.map((product) => product.coleccion)
+    return [...new Set([...configured, ...used].filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'es'))
+  }, [products, taxonomies])
+
+  const types = useMemo(() => {
+    const configured = (taxonomies?.tipo ?? []).map((item) => item.nombre)
+    const used = products.map((product) => product.tipo)
+    return [...new Set([...configured, ...used].filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'es'))
+  }, [products, taxonomies])
+
   const subcategories = useMemo(() => {
-    const values = new Set(
-      products
-        .map((product) => product.subcategoria)
-        .filter(Boolean)
-        .map((value) => String(value).trim()),
-    )
-    return [...values].sort((a, b) => a.localeCompare(b, 'es'))
-  }, [products])
+    const configured = (taxonomies?.subcategoria ?? []).map((item) => item.nombre)
+    const used = products.map((product) => product.subcategoria).filter(Boolean)
+    const values = new Set([...configured, ...used].map((value) => String(value).trim()))
+    return [...values].filter(Boolean).sort((a, b) => a.localeCompare(b, 'es'))
+  }, [products, taxonomies])
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -126,8 +139,29 @@ export default function ProductGrid({
         </div>
 
         <div className="catalog-toolbar">
+          <label className="catalog-search">
+            <Search size={17} strokeWidth={1.5} aria-hidden="true" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => onSearchChange?.(event.target.value)}
+              placeholder="Buscar por nombre, colección o categoría…"
+              aria-label="Buscar en la colección"
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                className="catalog-search__clear"
+                onClick={onClearSearch}
+                aria-label="Limpiar búsqueda"
+              >
+                <X size={15} />
+              </button>
+            ) : null}
+          </label>
+
           <div className="filter-tabs" role="group" aria-label="Filtrar por categoría">
-            {TYPE_OPTIONS.map((type) => (
+            {['Todo', ...types].map((type) => (
               <button
                 key={type}
                 type="button"
@@ -150,9 +184,10 @@ export default function ProductGrid({
                 value={activeFilters.collection}
                 onChange={(event) => updateFilter('collection', event.target.value)}
               >
-                {COLLECTION_OPTIONS.map((collection) => (
+                <option value="Todas">Todas las colecciones</option>
+                {collections.map((collection) => (
                   <option key={collection} value={collection}>
-                    {collection === 'Todas' ? 'Todas las colecciones' : collection}
+                    {collection}
                   </option>
                 ))}
               </select>

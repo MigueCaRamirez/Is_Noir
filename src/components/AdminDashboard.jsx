@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   AlertTriangle,
   Archive,
+  Bell,
   Boxes,
   Check,
   ChevronDown,
@@ -12,7 +13,6 @@ import {
   EyeOff,
   LoaderCircle,
   LogOut,
-  Minus,
   Newspaper,
   Package,
   Pencil,
@@ -21,6 +21,7 @@ import {
   Ruler,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react'
@@ -31,7 +32,6 @@ import {
   fetchAdminProducts,
   getProductErrorMessage,
   setProductDraft,
-  updateProductStock,
 } from '../services/productService'
 import {
   deleteNews,
@@ -43,12 +43,20 @@ import AdminProductForm from './AdminProductForm'
 import AdminNewsForm from './AdminNewsForm'
 import AdminReservationsPanel from './AdminReservationsPanel'
 import AdminSizeGuideForm from './AdminSizeGuideForm'
+import AdminTaxonomyManager from './AdminTaxonomyManager'
 import Logo, { Butterfly } from './Logo'
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Todo' },
   { value: 'published', label: 'Publicados' },
   { value: 'draft', label: 'Borradores' },
+]
+
+const ADMIN_TABS = [
+  { id: 'inventario', label: 'Inventario y Productos', icon: Boxes },
+  { id: 'noticias', label: 'Gestionar Noticias / Atelier', icon: Newspaper },
+  { id: 'reservas', label: 'Pedidos Apartados / En Proceso', icon: Clock3 },
+  { id: 'configuracion', label: 'Configuración de Catálogo', icon: SlidersHorizontal },
 ]
 
 function StatCard({ icon: Icon, label, value, hint, accent = false }) {
@@ -82,6 +90,10 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
   const [newsEditor, setNewsEditor] = useState({ open: false, item: null })
   const [sizeGuides, setSizeGuides] = useState(null)
   const [sizeGuideEditor, setSizeGuideEditor] = useState({ open: false, tipo: 'Ropa' })
+  const [activeTab, setActiveTab] = useState('inventario')
+  const [activeReservations, setActiveReservations] = useState(0)
+  const [bellOpen, setBellOpen] = useState(false)
+  const bellRef = useRef(null)
 
   const notify = useCallback((type, message) => {
     setNotice({ type, message })
@@ -92,6 +104,16 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
     const timer = window.setTimeout(() => setNotice(null), 4200)
     return () => window.clearTimeout(timer)
   }, [notice])
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (bellRef.current && !bellRef.current.contains(event.target)) {
+        setBellOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [])
 
   const loadProducts = useCallback(async () => {
     if (!isAdmin) return
@@ -186,36 +208,18 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
     })
   }, [products, query, statusFilter, typeFilter])
 
+  const productTypes = useMemo(
+    () =>
+      [...new Set(products.map((product) => product.tipo).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, 'es'),
+      ),
+    [products],
+  )
+
   const markBusy = (id, busy) => {
     setBusyIds((current) =>
       busy ? [...new Set([...current, id])] : current.filter((item) => item !== id),
     )
-  }
-
-  const handleStock = async (product, delta) => {
-    if (busyIds.includes(product.id)) return
-    const previousStock = Number(product.stock) || 0
-    const nextStock = Math.max(0, previousStock + delta)
-    if (nextStock === previousStock) return
-
-    markBusy(product.id, true)
-    setProducts((current) =>
-      current.map((item) => (item.id === product.id ? { ...item, stock: nextStock } : item)),
-    )
-    try {
-      const saved = await updateProductStock(product.id, nextStock)
-      setProducts((current) => current.map((item) => (item.id === product.id ? saved : item)))
-      onCatalogChanged?.()
-    } catch (error) {
-      setProducts((current) =>
-        current.map((item) =>
-          item.id === product.id ? { ...item, stock: previousStock } : item,
-        ),
-      )
-      notify('error', error.message || 'No se pudo actualizar el stock.')
-    } finally {
-      markBusy(product.id, false)
-    }
   }
 
   const handleDraftToggle = async (product) => {
@@ -356,6 +360,41 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
           </div>
         </div>
         <div className="admin-header__actions">
+          <div className="admin-bell-wrap" ref={bellRef}>
+            <button
+              type="button"
+              className="admin-icon-button admin-bell"
+              onClick={() => setBellOpen((open) => !open)}
+              aria-label={`${activeReservations} apartados activos`}
+              aria-expanded={bellOpen}
+            >
+              <Bell size={18} strokeWidth={1.4} />
+              {activeReservations > 0 ? (
+                <span className="admin-bell__badge">{activeReservations}</span>
+              ) : null}
+            </button>
+            {bellOpen ? (
+              <div className="admin-bell-card" role="status">
+                <span className="admin-kicker">Tiempo real</span>
+                <strong>
+                  {activeReservations} apartado{activeReservations === 1 ? '' : 's'} activo
+                  {activeReservations === 1 ? '' : 's'}
+                </strong>
+                <p>El stock de estas piezas está retenido hasta que venza el temporizador.</p>
+                <button
+                  type="button"
+                  className="admin-button admin-button--primary"
+                  onClick={() => {
+                    setActiveTab('reservas')
+                    setBellOpen(false)
+                  }}
+                >
+                  <Clock3 size={14} />
+                  Ver apartados
+                </button>
+              </div>
+            ) : null}
+          </div>
           <span className="admin-session">
             <ShieldCheck size={14} strokeWidth={1.4} />
             <span>
@@ -375,8 +414,30 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
         </div>
       </header>
 
+      <nav className="admin-tabs" aria-label="Secciones del panel">
+        {ADMIN_TABS.map((tab) => {
+          const Icon = tab.icon
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              className={activeTab === tab.id ? 'is-active' : ''}
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
+            >
+              <Icon size={16} strokeWidth={1.4} />
+              <span>{tab.label}</span>
+              {tab.id === 'reservas' && activeReservations > 0 ? (
+                <b className="admin-tabs__badge">{activeReservations}</b>
+              ) : null}
+            </button>
+          )
+        })}
+      </nav>
+
       <main className="admin-content">
-        <section className="admin-intro">
+        <div className="admin-tab-panel" hidden={activeTab !== 'inventario'}>
+          <section className="admin-intro">
           <div>
             <span className="admin-kicker">Colección viva</span>
             <h2>Tu inventario, <em>en orden.</em></h2>
@@ -401,14 +462,6 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
           />
         </section>
 
-        <AdminReservationsPanel
-          onCatalogChanged={() => {
-            loadProducts()
-            onCatalogChanged?.()
-          }}
-          notify={notify}
-        />
-
         <section className="admin-inventory">
           <div className="admin-inventory__head">
             <div>
@@ -429,8 +482,11 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
               <label className="admin-select">
                 <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Filtrar por tipo">
                   <option value="Todo">Todos los tipos</option>
-                  <option value="Ropa">Ropa</option>
-                  <option value="Accesorios">Accesorios</option>
+                  {productTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown size={13} />
               </label>
@@ -515,24 +571,15 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
                       </span>
                     </div>
 
-                    <div className="admin-stock">
-                      <button
-                        type="button"
-                        onClick={() => handleStock(product, -1)}
-                        disabled={busy || stock === 0}
-                        aria-label={`Reducir stock de ${product.nombre}`}
-                      >
-                        <Minus size={13} />
-                      </button>
-                      <span className={stock === 0 ? 'is-empty' : stock <= 3 ? 'is-low' : ''}>{stock}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleStock(product, 1)}
-                        disabled={busy}
-                        aria-label={`Aumentar stock de ${product.nombre}`}
-                      >
-                        <Plus size={13} />
-                      </button>
+                    <div className="admin-stock admin-stock--readonly">
+                      <span className={stock === 0 ? 'is-empty' : stock <= 3 ? 'is-low' : ''}>
+                        {stock}
+                      </span>
+                      {stock === 0 ? (
+                        <small className="admin-low-badge is-empty">Agotado</small>
+                      ) : stock <= 3 ? (
+                        <small className="admin-low-badge">Bajo stock</small>
+                      ) : null}
                     </div>
 
                     <div className="admin-product-row__status">
@@ -567,8 +614,21 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
             </div>
           )}
         </section>
+        </div>
 
-        <section className="admin-guides" aria-labelledby="admin-guides-title">
+        <div className="admin-tab-panel" hidden={activeTab !== 'reservas'}>
+          <AdminReservationsPanel
+            onCatalogChanged={() => {
+              loadProducts()
+              onCatalogChanged?.()
+            }}
+            notify={notify}
+            onActiveCountChange={setActiveReservations}
+          />
+        </div>
+
+        <div className="admin-tab-panel" hidden={activeTab !== 'configuracion'}>
+          <section className="admin-guides" aria-labelledby="admin-guides-title">
           <div className="admin-inventory__head">
             <div>
               <span className="admin-kicker">Medidas de la maison</span>
@@ -615,7 +675,17 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
           </div>
         </section>
 
-        <section className="admin-news" aria-labelledby="admin-news-title">
+          <AdminTaxonomyManager
+            notify={notify}
+            onChanged={() => {
+              loadProducts()
+              onCatalogChanged?.()
+            }}
+          />
+        </div>
+
+        <div className="admin-tab-panel" hidden={activeTab !== 'noticias'}>
+          <section className="admin-news" aria-labelledby="admin-news-title">
           <div className="admin-inventory__head">
             <div>
               <span className="admin-kicker">Noticias · Atelier</span>
@@ -728,6 +798,7 @@ export default function AdminDashboard({ onClose, onCatalogChanged }) {
             </div>
           )}
         </section>
+        </div>
 
         <footer className="admin-footer">
           <span><ShieldCheck size={13} /> Acceso protegido por Google OAuth, lista blanca y RLS.</span>

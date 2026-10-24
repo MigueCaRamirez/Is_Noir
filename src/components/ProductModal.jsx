@@ -15,11 +15,15 @@ import {
   X,
 } from 'lucide-react'
 import { useCart } from '../context/CartContext'
+import { SINGLE_SIZE } from '../data/catalogOptions'
 import {
   formatCOP,
   getAvailableStock,
+  getImageFocus,
   getProductImages,
   getSizeOptions,
+  getSizeStock,
+  isSingleSize,
   resolveProductImage,
 } from '../lib/format'
 import { buildSingleProductWhatsAppUrl } from '../services/orderService'
@@ -87,32 +91,97 @@ function SizeGuideCard({ guide, onClose }) {
 }
 
 export default function ProductModal({ product, onClose, sizeGuide }) {
-  const { addItem, openCart } = useCart()
+  const { addItem, addItems, openCart } = useCart()
   const [selectedSize, setSelectedSize] = useState('')
   const [quantity, setQuantity] = useState(1)
+  const [allocations, setAllocations] = useState({})
   const [activeImage, setActiveImage] = useState(0)
   const [error, setError] = useState('')
   const [guideOpen, setGuideOpen] = useState(false)
 
   const sizes = useMemo(() => getSizeOptions(product), [product])
   const images = useMemo(() => getProductImages(product), [product])
-  const isSingle = sizes.length === 1
+  const single = isSingleSize(product)
   const stock = getAvailableStock(product)
-  const maxQuantity = Math.max(1, stock)
+  const totalSizeStock = useMemo(
+    () => sizes.reduce((sum, size) => sum + getSizeStock(product, size), 0),
+    [sizes, product],
+  )
+  const maxQuantity = Math.max(1, single ? stock : totalSizeStock)
   const currentImage = images[activeImage] || ''
   const guide = sizeGuide || fallbackSizeGuide(product?.tipo || 'Ropa')
+  const focus = getImageFocus(product)
+
+  const allocatedTotal = useMemo(
+    () => Object.values(allocations).reduce((sum, value) => sum + (Number(value) || 0), 0),
+    [allocations],
+  )
+
+  const buildAllocations = (nextQuantity, preferred = selectedSize, current = allocations) => {
+    const next = {}
+    let remaining = Math.min(nextQuantity, totalSizeStock)
+
+    for (const size of sizes) {
+      const cap = getSizeStock(product, size)
+      const take = Math.min(cap, Math.max(0, Number(current?.[size]) || 0), remaining)
+      if (take > 0) {
+        next[size] = take
+        remaining -= take
+      }
+    }
+
+    const order = [preferred, ...sizes.filter((size) => size !== preferred)].filter(Boolean)
+    for (const size of order) {
+      if (remaining <= 0) break
+      const cap = getSizeStock(product, size) - (next[size] || 0)
+      const take = Math.min(Math.max(0, cap), remaining)
+      if (take > 0) {
+        next[size] = (next[size] || 0) + take
+        remaining -= take
+      }
+    }
+
+    return next
+  }
+
+  const changeQuantity = (next) => {
+    const clamped = Math.min(maxQuantity, Math.max(1, Math.floor(Number(next) || 1)))
+    setQuantity(clamped)
+    if (single) return
+
+    if (clamped <= 1) {
+      const first =
+        sizes.find((size) => (allocations[size] || 0) > 0) ||
+        selectedSize ||
+        sizes.find((size) => getSizeStock(product, size) > 0) ||
+        ''
+      setSelectedSize(first)
+      setAllocations(first ? { [first]: 1 } : {})
+      return
+    }
+
+    setAllocations((current) => buildAllocations(clamped, selectedSize, current))
+  }
 
   useEffect(() => {
-    setSelectedSize('')
+    setSelectedSize(single ? SINGLE_SIZE : '')
     setQuantity(1)
+    setAllocations({})
     setActiveImage(0)
     setError('')
     setGuideOpen(false)
-  }, [product?.id])
+  }, [product?.id, single])
 
   useEffect(() => {
     setQuantity((current) => Math.min(Math.max(1, current), maxQuantity))
   }, [maxQuantity])
+
+  useEffect(() => {
+    if (single || quantity <= 1) return
+    setAllocations((current) => buildAllocations(quantity, selectedSize, current))
+    // Solo se reajusta cuando cambia el inventario visible o la pieza.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxQuantity, product?.id])
 
   useEffect(() => {
     if (activeImage >= images.length) setActiveImage(0)
@@ -146,17 +215,61 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
 
   if (!product) return null
 
+  const chooseSize = (size) => {
+    if (getSizeStock(product, size) < 1) return
+    setSelectedSize(size)
+    setError('')
+    if (quantity === 1) setAllocations({ [size]: 1 })
+  }
+
+  const adjustAllocation = (size, delta) => {
+    setError('')
+    setAllocations((current) => {
+      const currentQuantity = Number(current[size]) || 0
+      const currentTotal = Object.values(current).reduce(
+        (sum, value) => sum + (Number(value) || 0),
+        0,
+      )
+      if (delta > 0 && currentTotal >= quantity) return current
+      const nextQuantity = Math.max(
+        0,
+        Math.min(getSizeStock(product, size), currentQuantity + delta),
+      )
+      if (nextQuantity === currentQuantity) return current
+      const next = { ...current }
+      if (nextQuantity > 0) next[size] = nextQuantity
+      else delete next[size]
+      return next
+    })
+  }
+
   const handleAdd = () => {
-    if (!selectedSize) {
-      setError('Selecciona una talla para continuar.')
-      return
-    }
     if (stock < 1) {
       setError('Esta pieza está agotada en este momento.')
       return
     }
+
     try {
-      addItem(product, selectedSize, quantity)
+      if (single) {
+        addItem(product, SINGLE_SIZE, quantity)
+      } else if (quantity === 1) {
+        if (!selectedSize) {
+          setError('Selecciona una talla para continuar.')
+          return
+        }
+        if (getSizeStock(product, selectedSize) < 1) {
+          setError(`La talla ${selectedSize} está agotada.`)
+          return
+        }
+        addItem(product, selectedSize, 1)
+      } else {
+        if (allocatedTotal !== quantity) {
+          setError('Asigna todas las unidades entre las tallas disponibles.')
+          return
+        }
+        addItems(product, allocations)
+      }
+
       setError('')
       onClose?.()
       openCart()
@@ -169,6 +282,19 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
     if (images.length < 2) return
     setActiveImage((current) => (current + direction + images.length) % images.length)
   }
+
+  const whatsappAllocations = single
+    ? null
+    : quantity === 1
+      ? selectedSize
+        ? { [selectedSize]: 1 }
+        : null
+      : allocations
+
+  const addDisabled =
+    stock === 0 ||
+    (!single && quantity === 1 && !selectedSize) ||
+    (!single && quantity > 1 && allocatedTotal !== quantity)
 
   return createPortal(
     <>
@@ -192,7 +318,11 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
           <div className="product-modal__visual">
             <div className="product-modal__arch">
               {currentImage ? (
-                <img src={resolveProductImage(currentImage)} alt={product.nombre} />
+                <img
+                  src={resolveProductImage(currentImage)}
+                  alt={product.nombre}
+                  style={{ objectPosition: focus }}
+                />
               ) : (
                 <div className="product-modal__placeholder">
                   <Butterfly />
@@ -231,7 +361,11 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
                     aria-label={`Ver foto ${index + 1} de ${product.nombre}`}
                     aria-pressed={activeImage === index}
                   >
-                    <img src={resolveProductImage(image)} alt="" />
+                    <img
+                      src={resolveProductImage(image)}
+                      alt=""
+                      style={{ objectPosition: focus }}
+                    />
                   </button>
                 ))}
               </div>
@@ -260,30 +394,84 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
 
             <div className="size-picker">
               <div className="size-picker__head">
-                <span className="size-picker__label">Selecciona tu talla</span>
+                <span className="size-picker__label">
+                  {single
+                    ? 'Talla única'
+                    : quantity === 1
+                      ? 'Selecciona tu talla'
+                      : 'Distribuye tus unidades por talla'}
+                </span>
                 <span className={`stock-pill ${stock <= 3 ? 'stock-pill--low' : ''}`}>
                   {stock > 0 ? `${stock} disponibles` : 'Agotado'}
                 </span>
               </div>
-              <div className="size-picker__options">
-                {sizes.map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    className={selectedSize === size ? 'is-active' : ''}
-                    onClick={() => {
-                      setSelectedSize(size)
-                      setError('')
-                    }}
-                    aria-pressed={selectedSize === size}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-              {isSingle ? (
+              {single ? (
                 <p className="size-picker__hint">Esta pieza se ofrece en talla única.</p>
-              ) : null}
+              ) : quantity === 1 ? (
+                <div className="size-picker__options">
+                  {sizes.map((size) => {
+                    const sizeStock = getSizeStock(product, size)
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        className={selectedSize === size ? 'is-active' : ''}
+                        onClick={() => chooseSize(size)}
+                        disabled={sizeStock < 1}
+                        aria-pressed={selectedSize === size}
+                        aria-label={`Talla ${size}, ${sizeStock} disponibles`}
+                      >
+                        {size}
+                        <small>{sizeStock}</small>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="size-allocation">
+                  {sizes.map((size) => {
+                    const sizeStock = getSizeStock(product, size)
+                    const assigned = Number(allocations[size]) || 0
+                    return (
+                      <div
+                        className={`size-allocation__row ${sizeStock < 1 ? 'is-sold-out' : ''}`}
+                        key={size}
+                      >
+                        <div className="size-allocation__label">
+                          <strong>{size}</strong>
+                          <span>{sizeStock > 0 ? `${sizeStock} disponibles` : 'Agotada'}</span>
+                        </div>
+                        <div className="size-allocation__control">
+                          <button
+                            type="button"
+                            onClick={() => adjustAllocation(size, -1)}
+                            disabled={assigned <= 0}
+                            aria-label={`Restar una unidad de talla ${size}`}
+                          >
+                            <Minus size={13} />
+                          </button>
+                          <span>{assigned}</span>
+                          <button
+                            type="button"
+                            onClick={() => adjustAllocation(size, 1)}
+                            disabled={assigned >= sizeStock || allocatedTotal >= quantity}
+                            aria-label={`Sumar una unidad de talla ${size}`}
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <p
+                    className={`size-allocation__summary ${allocatedTotal === quantity ? 'is-complete' : ''}`}
+                  >
+                    {allocatedTotal === quantity
+                      ? `${quantity} unidad(es) asignadas`
+                      : `Asigna ${Math.max(0, quantity - allocatedTotal)} unidad(es) más`}
+                  </p>
+                </div>
+              )}
               <button
                 type="button"
                 className="size-picker__guide"
@@ -299,7 +487,7 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
               <div className="quantity-control" aria-label="Cantidad">
                 <button
                   type="button"
-                  onClick={() => setQuantity((value) => Math.max(1, value - 1))}
+                  onClick={() => changeQuantity(quantity - 1)}
                   disabled={quantity <= 1}
                   aria-label="Restar una unidad"
                 >
@@ -314,16 +502,12 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
                   aria-label="Cantidad de unidades"
                   onChange={(event) => {
                     const next = Math.floor(Number(event.target.value))
-                    if (!Number.isFinite(next)) {
-                      setQuantity(1)
-                      return
-                    }
-                    setQuantity(Math.min(maxQuantity, Math.max(1, next)))
+                    changeQuantity(Number.isFinite(next) ? next : 1)
                   }}
                 />
                 <button
                   type="button"
-                  onClick={() => setQuantity((value) => Math.min(maxQuantity, value + 1))}
+                  onClick={() => changeQuantity(quantity + 1)}
                   disabled={quantity >= maxQuantity}
                   aria-label="Sumar una unidad"
                 >
@@ -334,7 +518,7 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
                 type="button"
                 className="button-primary product-modal__add"
                 onClick={handleAdd}
-                disabled={stock === 0}
+                disabled={addDisabled}
               >
                 <ShoppingBag size={17} strokeWidth={1.5} />
                 {stock === 0 ? 'Agotado' : 'Añadir al carrito'}
@@ -347,7 +531,8 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
             ) : null}
 
             <p className="product-modal__reserve-note">
-              Al añadir tu pieza, apartamos el stock durante 15 minutos.
+              Al añadir tu pieza, apartamos el stock durante 15 minutos. Si el
+              apartado expira, podrás renovarlo por 10 o 5 minutos.
             </p>
 
             <a
@@ -355,6 +540,7 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
               href={buildSingleProductWhatsAppUrl(product, {
                 size: selectedSize,
                 quantity,
+                allocations: whatsappAllocations,
               })}
               target="_blank"
               rel="noopener noreferrer"
