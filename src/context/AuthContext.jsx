@@ -41,6 +41,30 @@ export function AuthProvider({ children }) {
   const [signingIn, setSigningIn] = useState(false)
 
   useEffect(() => {
+    const onPageShow = (event) => {
+      if (!event.persisted) return
+      // Al volver desde Google con el botón Atrás, el navegador puede restaurar
+      // la página congelada con el estado "Conectando…" y el body bloqueado.
+      setSigningIn(false)
+      document.body.style.overflow = ''
+    }
+    const onVisibility = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        sessionStorage.getItem('isnoir-admin-intent') === '1'
+      ) {
+        setSigningIn(false)
+      }
+    }
+    window.addEventListener('pageshow', onPageShow)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pageshow', onPageShow)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
       setLoading(false)
       return undefined
@@ -116,6 +140,11 @@ export function AuthProvider({ children }) {
     setAuthError('')
     setDeniedEmail('')
     sessionStorage.setItem('isnoir-admin-intent', '1')
+    try {
+      sessionStorage.setItem('isnoir-oauth-scroll', String(window.scrollY || 0))
+    } catch {
+      // La restauración del scroll es una mejora progresiva.
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
