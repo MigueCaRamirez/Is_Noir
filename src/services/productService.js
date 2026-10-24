@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient'
-import { PRODUCT_COLLECTIONS, PRODUCT_TYPES } from '../data/catalogOptions'
+import { CLOTHING_SIZES } from '../data/catalogOptions'
+import { normalizeImageFocus } from '../lib/format'
 
 function getClient() {
   if (!supabase) {
@@ -35,16 +36,58 @@ function normalizeImages(payload) {
     .filter(Boolean)
   const unique = [...new Set(normalized)]
 
+  if (unique.length === 0) {
+    throw new Error('Agrega al menos una imagen para publicar la pieza.')
+  }
   if (unique.length > 5) {
     throw new Error('Puedes guardar hasta 5 imágenes por pieza.')
   }
   return unique
 }
 
+function normalizeSizes(payload) {
+  const tallaUnica = Boolean(payload.talla_unica)
+
+  if (tallaUnica) {
+    const stock = Number(payload.stock)
+    if (!Number.isInteger(stock) || stock < 0) {
+      throw new Error('El stock debe ser un entero igual o mayor a cero.')
+    }
+    return { tallaUnica, stock, tallasStock: {} }
+  }
+
+  const raw = payload.tallas_stock
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Asigna cantidades a por lo menos una talla.')
+  }
+
+  const tallasStock = {}
+  for (const size of CLOTHING_SIZES) {
+    const value = raw[size]
+    if (value === undefined || value === null || value === '') continue
+    const quantity = Number(value)
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      throw new Error(`La cantidad de la talla ${size} debe ser un entero igual o mayor a cero.`)
+    }
+    if (quantity > 0) tallasStock[size] = quantity
+  }
+
+  const total = Object.values(tallasStock).reduce((sum, quantity) => sum + quantity, 0)
+  const requestedStock = Number(payload.stock)
+  if (Number.isFinite(requestedStock) && Math.floor(requestedStock) !== total) {
+    throw new Error('La suma de las cantidades por talla debe ser igual al stock total.')
+  }
+  if (total < 0) {
+    throw new Error('El stock no puede ser negativo.')
+  }
+
+  return { tallaUnica, stock: total, tallasStock }
+}
+
 export function sanitizeProduct(payload) {
   const precio = Number(payload.precio)
-  const stock = Number(payload.stock)
   const images = normalizeImages(payload)
+  const { tallaUnica, stock, tallasStock } = normalizeSizes(payload)
 
   if (!cleanText(payload.nombre)) {
     throw new Error('El nombre del producto es obligatorio.')
@@ -52,13 +95,10 @@ export function sanitizeProduct(payload) {
   if (!Number.isFinite(precio) || precio < 0) {
     throw new Error('El precio debe ser un número igual o mayor a cero.')
   }
-  if (!Number.isInteger(stock) || stock < 0) {
-    throw new Error('El stock debe ser un entero igual o mayor a cero.')
-  }
-  if (!PRODUCT_COLLECTIONS.includes(payload.coleccion)) {
+  if (!cleanText(payload.coleccion)) {
     throw new Error('Selecciona una colección válida.')
   }
-  if (!PRODUCT_TYPES.includes(payload.tipo)) {
+  if (!cleanText(payload.tipo)) {
     throw new Error('Selecciona un tipo de producto válido.')
   }
 
@@ -66,11 +106,14 @@ export function sanitizeProduct(payload) {
     nombre: cleanText(payload.nombre),
     precio: Math.round(precio * 100) / 100,
     stock,
-    coleccion: payload.coleccion,
-    tipo: payload.tipo,
+    coleccion: cleanText(payload.coleccion, 80),
+    tipo: cleanText(payload.tipo, 80),
     subcategoria: cleanText(payload.subcategoria, 80) || null,
     imagen_url: images[0] || null,
     imagenes_urls: images,
+    imagen_enfoque: normalizeImageFocus(payload.imagen_enfoque),
+    talla_unica: tallaUnica,
+    tallas_stock: tallasStock,
     borrador: Boolean(payload.borrador),
     es_novedad: Boolean(payload.es_novedad),
   }

@@ -1,8 +1,22 @@
+import { CLOTHING_SIZES, SINGLE_SIZE } from '../data/catalogOptions'
+
 const copFormatter = new Intl.NumberFormat('es-CO', {
   style: 'currency',
   currency: 'COP',
   maximumFractionDigits: 0,
 })
+
+const IMAGE_FOCUS_VALUES = new Set([
+  'center',
+  'top',
+  'bottom',
+  'left',
+  'right',
+  'top left',
+  'top right',
+  'bottom left',
+  'bottom right',
+])
 
 export function formatCOP(value) {
   const amount = Number(value)
@@ -24,9 +38,55 @@ export function normalizeEmail(value) {
   return String(value ?? '').trim().toLowerCase()
 }
 
+export function isSingleSize(product) {
+  if (!product) return true
+  if (typeof product.talla_unica === 'boolean') return product.talla_unica
+  return product.tipo !== 'Ropa'
+}
+
 export function getSizeOptions(product) {
-  if (!product) return ['Única']
-  return product.tipo === 'Ropa' ? ['XS', 'S', 'M', 'L', 'XL'] : ['Única']
+  if (!product) return [SINGLE_SIZE]
+  if (isSingleSize(product)) return [SINGLE_SIZE]
+
+  const stock = product.tallas_stock
+  const keys = stock && typeof stock === 'object' ? Object.keys(stock) : []
+  const ordered = CLOTHING_SIZES.filter((size) => keys.includes(size))
+  return ordered.length ? ordered : [...CLOTHING_SIZES]
+}
+
+export function getSizeStock(product, size) {
+  if (!product) return 0
+  if (isSingleSize(product) || size === SINGLE_SIZE) return getAvailableStock(product)
+
+  const available = product.tallas_disponibles
+  if (available && typeof available === 'object' && Object.hasOwn(available, size)) {
+    return Math.max(0, Math.floor(Number(available[size]) || 0))
+  }
+
+  const raw = product.tallas_stock?.[size]
+  return Math.max(0, Math.floor(Number(raw) || 0))
+}
+
+export function getSizeAvailableStock(product, size) {
+  return getSizeStock(product, size)
+}
+
+export function getImageFocus(product) {
+  const focus = String(product?.imagen_enfoque ?? '').trim().toLowerCase()
+  return IMAGE_FOCUS_VALUES.has(focus) ? focus : 'center'
+}
+
+export function normalizeImageFocus(value) {
+  const focus = String(value ?? '').trim().toLowerCase()
+  return IMAGE_FOCUS_VALUES.has(focus) ? focus : 'center'
+}
+
+export function getSizeSummary(product) {
+  if (!product) return ''
+  if (isSingleSize(product)) return 'Talla única'
+  return getSizeOptions(product)
+    .map((size) => `${size}: ${getSizeStock(product, size)}`)
+    .join(' · ')
 }
 
 export function getProductImages(product) {

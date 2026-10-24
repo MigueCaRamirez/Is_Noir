@@ -26,6 +26,9 @@ create table if not exists public.productos (
   subcategoria text,
   imagen_url text,
   imagenes_urls text[] not null default '{}'::text[],
+  imagen_enfoque text not null default 'center',
+  talla_unica boolean not null default false,
+  tallas_stock jsonb not null default '{}'::jsonb,
   borrador boolean not null default true,
   es_novedad boolean not null default false,
   solicitudes integer not null default 0,
@@ -36,8 +39,13 @@ create table if not exists public.productos (
   constraint productos_solicitudes_positivas check (solicitudes >= 0),
   constraint productos_ventas_positivas check (ventas >= 0),
   constraint productos_imagenes_maximo check (coalesce(array_length(imagenes_urls, 1), 0) <= 5),
-  constraint productos_coleccion_valida check (coleccion in ('Old Money', 'Alternativo')),
-  constraint productos_tipo_valido check (tipo in ('Ropa', 'Accesorios'))
+  constraint productos_tallas_stock_objeto check (jsonb_typeof(tallas_stock) = 'object'),
+  constraint productos_enfoque_valido check (
+    imagen_enfoque in (
+      'center', 'top', 'bottom', 'left', 'right',
+      'top left', 'top right', 'bottom left', 'bottom right'
+    )
+  )
 );
 
 -- Compatibilidad con instalaciones anteriores del esquema.
@@ -49,6 +57,34 @@ alter table public.productos
   add column if not exists ventas integer not null default 0;
 alter table public.productos
   add column if not exists imagenes_urls text[] not null default '{}'::text[];
+alter table public.productos
+  add column if not exists imagen_enfoque text not null default 'center';
+alter table public.productos
+  add column if not exists talla_unica boolean not null default false;
+alter table public.productos
+  add column if not exists tallas_stock jsonb not null default '{}'::jsonb;
+
+-- El catálogo ahora es dinámico: las colecciones y los tipos se administran
+-- desde la tabla taxonomias. Retiramos las restricciones fijas anteriores.
+alter table public.productos
+  drop constraint if exists productos_coleccion_valida;
+alter table public.productos
+  drop constraint if exists productos_tipo_valido;
+
+alter table public.productos
+  drop constraint if exists productos_tallas_stock_objeto;
+alter table public.productos
+  add constraint productos_tallas_stock_objeto
+  check (jsonb_typeof(tallas_stock) = 'object');
+alter table public.productos
+  drop constraint if exists productos_enfoque_valido;
+alter table public.productos
+  add constraint productos_enfoque_valido check (
+    imagen_enfoque in (
+      'center', 'top', 'bottom', 'left', 'right',
+      'top left', 'top right', 'bottom left', 'bottom right'
+    )
+  );
 
 alter table public.productos
   drop constraint if exists productos_solicitudes_positivas;
@@ -203,6 +239,191 @@ begin
    where p.nombre = v.nombre
      and p.ventas = 0;
 end $$;
+
+-- ─── Inicialización de inventario por talla ─────────────────────────────────
+-- Las prendas existentes reciben una distribución inicial de su stock entre
+-- las tallas disponibles. El equipo puede ajustarla después desde el panel.
+do $$
+begin
+  update public.productos
+     set talla_unica = true,
+         tallas_stock = '{}'::jsonb
+   where tipo = 'Accesorios'
+     and tallas_stock = '{}'::jsonb
+     and talla_unica = false;
+
+  with sizes(size, posicion) as (
+    values ('XS', 1), ('S', 2), ('M', 3), ('L', 4), ('XL', 5)
+  ),
+  distribucion as (
+    select
+      p.id,
+      jsonb_object_agg(
+        s.size,
+        (p.stock / 5) + case when s.posicion <= (p.stock % 5) then 1 else 0 end
+      ) as tallas
+    from public.productos p
+    cross join sizes s
+    where p.tipo = 'Ropa'
+      and p.tallas_stock = '{}'::jsonb
+    group by p.id
+  )
+  update public.productos p
+     set tallas_stock = d.tallas,
+         talla_unica = false
+    from distribucion d
+   where p.id = d.id;
+
+  update public.productos
+     set talla_unica = false
+   where tipo = 'Ropa'
+     and tallas_stock <> '{}'::jsonb;
+end $$;
+
+-- ─── Taxonomías editables del catálogo ──────────────────────────────────────
+create table if not exists public.taxonomias (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  categoria text not null,
+  nombre text not null,
+  constraint taxonomias_categoria_valida
+    check (categoria in ('coleccion', 'tipo', 'subcategoria')),
+  constraint taxonomias_nombre_largo
+    check (char_length(btrim(nombre)) between 1 and 80)
+);
+
+create unique index if not exists taxonomias_categoria_nombre_idx
+  on public.taxonomias (categoria, lower(btrim(nombre)));
+
+insert into public.taxonomias (categoria, nombre)
+values
+  ('coleccion', 'Old Money'),
+  ('coleccion', 'Alternativo'),
+  ('tipo', 'Ropa'),
+  ('tipo', 'Accesorios')
+on conflict (categoria, lower(btrim(nombre))) do nothing;
+
+insert into public.taxonomias (categoria, nombre)
+select distinct 'subcategoria', btrim(subcategoria)
+  from public.productos
+ where subcategoria is not null
+   and btrim(subcategoria) <> ''
+on conflict (categoria, lower(btrim(nombre))) do nothing;
+
+alter table public.taxonomias enable row level security;
+alter table public.taxonomias force row level security;
+
+drop policy if exists "taxonomias_select_publicas" on public.taxonomias;
+drop policy if exists "taxonomias_admin" on public.taxonomias;
+
+create policy "taxonomias_select_publicas"
+  on public.taxonomias
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy "taxonomias_admin"
+  on public.taxonomias
+  for all
+  to authenticated
+  using (public.is_noir_admin())
+  with check (public.is_noir_admin());
+
+revoke all on table public.taxonomias from anon, authenticated;
+grant select on table public.taxonomias to anon, authenticated;
+grant insert, update, delete on table public.taxonomias to authenticated;
+
+-- Las taxonomías son libres, pero todo producto debe apuntar a una existente.
+create or replace function public.validar_taxonomias_producto()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.taxonomias
+     where categoria = 'coleccion'
+       and lower(btrim(nombre)) = lower(btrim(new.coleccion))
+  ) then
+    raise exception 'La colección % no existe en la configuración del catálogo.', new.coleccion;
+  end if;
+
+  if not exists (
+    select 1 from public.taxonomias
+     where categoria = 'tipo'
+       and lower(btrim(nombre)) = lower(btrim(new.tipo))
+  ) then
+    raise exception 'El tipo % no existe en la configuración del catálogo.', new.tipo;
+  end if;
+
+  if new.subcategoria is not null and btrim(new.subcategoria) <> '' then
+    if not exists (
+      select 1 from public.taxonomias
+       where categoria = 'subcategoria'
+         and lower(btrim(nombre)) = lower(btrim(new.subcategoria))
+    ) then
+      raise exception 'La subcategoría % no existe en la configuración del catálogo.', new.subcategoria;
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists productos_validar_taxonomias on public.productos;
+create trigger productos_validar_taxonomias
+  before insert or update of coleccion, tipo, subcategoria on public.productos
+  for each row execute function public.validar_taxonomias_producto();
+
+-- El stock total y el detalle por talla deben cuadrar siempre.
+create or replace function public.validar_tallas_producto()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_key text;
+  v_value text;
+  v_total integer;
+begin
+  if new.talla_unica then
+    if new.tallas_stock <> '{}'::jsonb then
+      raise exception 'Un producto de talla única no puede tener cantidades por talla.';
+    end if;
+    return new;
+  end if;
+
+  if jsonb_typeof(new.tallas_stock) <> 'object' then
+    raise exception 'El inventario por talla debe ser un objeto JSON.';
+  end if;
+
+  for v_key, v_value in select key, value from jsonb_each_text(new.tallas_stock) loop
+    if v_key not in ('XS', 'S', 'M', 'L', 'XL') then
+      raise exception 'La talla % no es válida.', v_key;
+    end if;
+    if v_value !~ '^[0-9]+$' then
+      raise exception 'La cantidad de la talla % debe ser un entero positivo.', v_key;
+    end if;
+  end loop;
+
+  select coalesce(sum(value::integer), 0)
+    into v_total
+    from jsonb_each_text(new.tallas_stock);
+
+  if v_total <> new.stock then
+    raise exception 'La suma por tallas (%) debe ser igual al stock total (%).', v_total, new.stock;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists productos_validar_tallas on public.productos;
+create trigger productos_validar_tallas
+  before insert or update of stock, talla_unica, tallas_stock on public.productos
+  for each row execute function public.validar_tallas_producto();
 
 -- ─── Noticias del atelier ────────────────────────────────────────────────────
 create table if not exists public.noticias (
@@ -361,6 +582,25 @@ create index if not exists reservas_cart_token_idx
 create index if not exists reservas_created_idx
   on public.reservas (created_at desc);
 
+-- Normaliza instalaciones anteriores antes de exigir un único apartado activo
+-- por carrito. Conserva el más reciente y libera los duplicados.
+with ranked_active as (
+  select id,
+         row_number() over (
+           partition by cart_token
+           order by created_at desc, id desc
+         ) as position
+    from public.reservas
+   where status = 'active'
+)
+update public.reservas r
+   set status = 'cancelled',
+       cancelled_at = now(),
+       updated_at = now()
+  from ranked_active ra
+ where r.id = ra.id
+   and ra.position > 1;
+
 create unique index if not exists reservas_un_apartado_activo_por_carrito
   on public.reservas (cart_token)
   where status = 'active';
@@ -370,6 +610,26 @@ create index if not exists reserva_items_reserva_idx
 
 create index if not exists reserva_items_producto_idx
   on public.reserva_items (producto_id);
+
+-- Migración única: los apartados creados con la versión anterior usaban la
+-- talla genérica "Única" para todas las prendas. Se liberan para que el cliente
+-- vuelva a apartar con su talla real y el inventario por talla quede íntegro.
+do $$
+begin
+  update public.reservas re
+     set status = 'cancelled',
+         cancelled_at = now(),
+         updated_at = now()
+   where re.status = 'active'
+     and exists (
+       select 1
+         from public.reserva_items ri
+         join public.productos p on p.id = ri.producto_id
+        where ri.reserva_id = re.id
+          and p.talla_unica = false
+          and ri.talla = 'Única'
+     );
+end $$;
 
 alter table public.reservas enable row level security;
 alter table public.reservas force row level security;
@@ -406,7 +666,27 @@ as
 select
   p.*,
   coalesce(r.reservado, 0)::integer as stock_reservado,
-  greatest(p.stock - coalesce(r.reservado, 0), 0)::integer as stock_disponible
+  greatest(p.stock - coalesce(r.reservado, 0), 0)::integer as stock_disponible,
+  case
+    when p.talla_unica then '{}'::jsonb
+    else coalesce((
+      select jsonb_object_agg(
+        s.key,
+        greatest(s.value::integer - coalesce(rs.reservado, 0), 0)
+      )
+      from jsonb_each_text(p.tallas_stock) s
+      left join (
+        select ri.talla, sum(ri.cantidad)::integer as reservado
+          from public.reserva_items ri
+          join public.reservas re on re.id = ri.reserva_id
+         where ri.producto_id = p.id
+           and re.status = 'active'
+           and re.expires_at > now()
+           and ri.talla is not null
+         group by ri.talla
+      ) rs on rs.talla = s.key
+    ), '{}'::jsonb)
+  end as tallas_disponibles
 from public.productos p
 left join (
   select ri.producto_id, sum(ri.cantidad)::integer as reservado
@@ -437,6 +717,8 @@ security definer
 set search_path = public
 as $$
 declare
+  v_existing_id uuid;
+  v_existing_expires timestamptz;
   v_reserva_id uuid;
   v_expires_at timestamptz;
   v_total numeric(12, 2) := 0;
@@ -444,7 +726,8 @@ declare
   v_line record;
   v_reserved integer;
   v_available integer;
-  v_minutes integer := greatest(5, least(coalesce(p_minutes, 15), 20));
+  v_minutes integer := greatest(5, least(coalesce(p_minutes, 15), 15));
+  v_is_new boolean := false;
   v_result jsonb;
 begin
   if p_cart_token is null then
@@ -475,79 +758,171 @@ begin
     raise exception 'Una de las piezas de tu selección no es válida.';
   end if;
 
-  -- La reserva anterior del mismo carrito se reemplaza de forma atómica.
-  update public.reservas
-     set status = 'cancelled',
-         cancelled_at = now(),
-         updated_at = now()
-   where cart_token = p_cart_token
-     and status = 'active';
+  perform 1
+    from jsonb_array_elements(p_items) as item
+    left join public.productos p on p.id = (item->>'producto_id')::uuid
+   where p.id is null;
+
+  if found then
+    raise exception 'Una de las piezas de tu selección ya no está disponible.';
+  end if;
 
   -- Bloquea cada producto en orden para evitar sobreventa entre dos clientes.
+  for v_product in
+    select *
+      from public.productos
+     where id in (
+       select distinct (item->>'producto_id')::uuid
+         from jsonb_array_elements(p_items) as item
+     )
+     order by id
+     for update
+  loop
+    null;
+  end loop;
+
+  -- Si el carrito ya tiene un apartado vigente, se actualiza EN EL MISMO
+  -- registro y conserva su expires_at. Agregar piezas nunca reinicia el reloj.
+  select id, expires_at
+    into v_existing_id, v_existing_expires
+    from public.reservas
+   where cart_token = p_cart_token
+     and status = 'active'
+   order by created_at desc
+   limit 1
+   for update;
+
+  if v_existing_id is not null then
+    if v_existing_expires <= now() then
+      update public.reservas
+         set status = 'expired',
+             updated_at = now()
+       where id = v_existing_id;
+      v_existing_id := null;
+    else
+      v_reserva_id := v_existing_id;
+      v_expires_at := v_existing_expires;
+      delete from public.reserva_items where reserva_id = v_reserva_id;
+    end if;
+  end if;
+
+  if v_reserva_id is null then
+    v_is_new := true;
+    v_expires_at := now() + make_interval(mins => v_minutes);
+
+    insert into public.reservas (cart_token, expires_at, total, status)
+    values (p_cart_token, v_expires_at, 0, 'active')
+    returning id into v_reserva_id;
+  end if;
+
+  -- Agrupa por producto + talla para que dos líneas de la misma talla no
+  -- puedan superar el stock disponible.
   for v_line in
-    select producto_id, sum(cantidad)::integer as cantidad
-      from (
-        select
-          (item->>'producto_id')::uuid as producto_id,
-          greatest(1, least(99, coalesce((item->>'cantidad')::integer, 1))) as cantidad
-        from jsonb_array_elements(p_items) as item
-      ) parsed
-     group by producto_id
-     order by producto_id
+    select
+      p.id as producto_id,
+      p.nombre,
+      p.precio,
+      p.stock,
+      p.talla_unica,
+      p.tallas_stock,
+      case
+        when p.talla_unica then 'Única'
+        else upper(btrim(coalesce(item->>'talla', '')))
+      end as talla,
+      sum(greatest(1, least(99, coalesce((item->>'cantidad')::integer, 1))))::integer as cantidad
+    from jsonb_array_elements(p_items) as item
+    join public.productos p on p.id = (item->>'producto_id')::uuid
+    group by
+      p.id, p.nombre, p.precio, p.stock, p.talla_unica, p.tallas_stock,
+      case
+        when p.talla_unica then 'Única'
+        else upper(btrim(coalesce(item->>'talla', '')))
+      end
+    order by p.id, talla
   loop
     select *
       into v_product
       from public.productos
-     where id = v_line.producto_id
-     for update;
+     where id = v_line.producto_id;
 
     if not found or v_product.borrador then
       raise exception 'Una de las piezas de tu selección ya no está disponible.';
     end if;
 
-    select coalesce(sum(ri.cantidad), 0)::integer
-      into v_reserved
-      from public.reserva_items ri
-      join public.reservas re on re.id = ri.reserva_id
-     where ri.producto_id = v_line.producto_id
-       and re.status = 'active'
-       and re.expires_at > now();
+    if v_product.talla_unica then
+      select coalesce(sum(ri.cantidad), 0)::integer
+        into v_reserved
+        from public.reserva_items ri
+        join public.reservas re on re.id = ri.reserva_id
+       where ri.producto_id = v_line.producto_id
+         and re.status = 'active'
+         and re.expires_at > now();
 
-    v_available := greatest(0, v_product.stock - v_reserved);
+      v_available := greatest(0, v_product.stock - v_reserved);
 
-    if v_line.cantidad > v_available then
-      raise exception 'No hay stock suficiente para %. Disponible: % unidad(es).',
-        v_product.nombre, v_available;
+      if v_line.cantidad > v_available then
+        raise exception 'No hay stock suficiente para %. Disponible: % unidad(es).',
+          v_product.nombre, v_available;
+      end if;
+    else
+      if v_line.talla = '' then
+        raise exception 'Selecciona una talla para %.', v_product.nombre;
+      end if;
+
+      if not (v_product.tallas_stock ? v_line.talla) then
+        raise exception 'La talla % de % ya no está disponible.', v_line.talla, v_product.nombre;
+      end if;
+
+      select coalesce(sum(ri.cantidad), 0)::integer
+        into v_reserved
+        from public.reserva_items ri
+        join public.reservas re on re.id = ri.reserva_id
+       where ri.producto_id = v_line.producto_id
+         and ri.talla = v_line.talla
+         and re.status = 'active'
+         and re.expires_at > now();
+
+      v_available := greatest(
+        0,
+        coalesce((v_product.tallas_stock ->> v_line.talla)::integer, 0) - v_reserved
+      );
+
+      if v_line.cantidad > v_available then
+        raise exception 'No hay stock suficiente para % en talla %. Disponible: % unidad(es).',
+          v_product.nombre, v_line.talla, v_available;
+      end if;
     end if;
+
+    insert into public.reserva_items (
+      reserva_id,
+      producto_id,
+      nombre,
+      precio,
+      talla,
+      cantidad,
+      imagen_url
+    )
+    values (
+      v_reserva_id,
+      v_product.id,
+      v_product.nombre,
+      v_product.precio,
+      v_line.talla,
+      v_line.cantidad,
+      coalesce(v_product.imagen_url, (v_product.imagenes_urls)[1])
+    );
 
     v_total := v_total + (v_product.precio * v_line.cantidad);
   end loop;
 
-  v_expires_at := now() + make_interval(mins => v_minutes);
+  if not exists (select 1 from public.reserva_items where reserva_id = v_reserva_id) then
+    raise exception 'El carrito está vacío.';
+  end if;
 
-  insert into public.reservas (cart_token, expires_at, total, status)
-  values (p_cart_token, v_expires_at, v_total, 'active')
-  returning id into v_reserva_id;
-
-  insert into public.reserva_items (
-    reserva_id,
-    producto_id,
-    nombre,
-    precio,
-    talla,
-    cantidad,
-    imagen_url
-  )
-  select
-    v_reserva_id,
-    p.id,
-    p.nombre,
-    p.precio,
-    coalesce(nullif(trim(item->>'talla'), ''), 'Única'),
-    greatest(1, least(99, coalesce((item->>'cantidad')::integer, 1))),
-    coalesce(p.imagen_url, (p.imagenes_urls)[1])
-  from jsonb_array_elements(p_items) as item
-  join public.productos p on p.id = (item->>'producto_id')::uuid;
+  update public.reservas
+     set total = v_total,
+         updated_at = now()
+   where id = v_reserva_id;
 
   select jsonb_build_object(
     'id', re.id,
@@ -555,6 +930,7 @@ begin
     'created_at', re.created_at,
     'total', re.total,
     'status', re.status,
+    'is_new', v_is_new,
     'items', coalesce(
       (
         select jsonb_agg(
@@ -635,6 +1011,7 @@ declare
   v_reserva public.reservas%rowtype;
   v_product public.productos%rowtype;
   v_line record;
+  v_size_stock integer;
 begin
   if not public.is_noir_admin() then
     raise exception 'No autorizado para confirmar apartados.' using errcode = '42501';
@@ -664,12 +1041,12 @@ begin
   end if;
 
   for v_line in
-    select producto_id, sum(cantidad)::integer as cantidad
+    select producto_id, talla, sum(cantidad)::integer as cantidad
       from public.reserva_items
      where reserva_id = p_reserva_id
        and producto_id is not null
-     group by producto_id
-     order by producto_id
+     group by producto_id, talla
+     order by producto_id, talla
   loop
     select *
       into v_product
@@ -681,15 +1058,39 @@ begin
       raise exception 'Una de las piezas de este apartado ya no existe.';
     end if;
 
-    if v_product.stock < v_line.cantidad then
-      raise exception 'No hay stock suficiente para %. Stock actual: %.',
-        v_product.nombre, v_product.stock;
-    end if;
+    if v_product.talla_unica then
+      if v_product.stock < v_line.cantidad then
+        raise exception 'No hay stock suficiente para %. Stock actual: %.',
+          v_product.nombre, v_product.stock;
+      end if;
 
-    update public.productos
-       set stock = stock - v_line.cantidad,
-           ventas = ventas + v_line.cantidad
-     where id = v_line.producto_id;
+      update public.productos
+         set stock = stock - v_line.cantidad,
+             ventas = ventas + v_line.cantidad
+       where id = v_line.producto_id;
+    else
+      if not (v_product.tallas_stock ? coalesce(v_line.talla, '')) then
+        raise exception 'La talla % de % ya no existe en el inventario.',
+          coalesce(v_line.talla, '—'), v_product.nombre;
+      end if;
+
+      v_size_stock := coalesce((v_product.tallas_stock ->> v_line.talla)::integer, 0);
+
+      if v_size_stock < v_line.cantidad then
+        raise exception 'No hay stock suficiente para % en talla %. Stock actual: %.',
+          v_product.nombre, v_line.talla, v_size_stock;
+      end if;
+
+      update public.productos
+         set stock = stock - v_line.cantidad,
+             tallas_stock = jsonb_set(
+               tallas_stock,
+               array[v_line.talla],
+               to_jsonb(v_size_stock - v_line.cantidad)
+             ),
+             ventas = ventas + v_line.cantidad
+       where id = v_line.producto_id;
+    end if;
   end loop;
 
   update public.reservas
@@ -726,6 +1127,54 @@ begin
 end;
 $$;
 
+-- Consulta segura para que el cliente pueda reanudar su contador y detectar
+-- cuando el atelier libera o confirma el apartado. Exige el token del carrito.
+create or replace function public.estado_reserva(
+  p_reserva_id uuid,
+  p_cart_token uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reserva public.reservas%rowtype;
+begin
+  if p_reserva_id is null or p_cart_token is null then
+    return null;
+  end if;
+
+  select *
+    into v_reserva
+    from public.reservas
+   where id = p_reserva_id
+     and cart_token = p_cart_token
+   for update;
+
+  if not found then
+    return null;
+  end if;
+
+  if v_reserva.status = 'active' and v_reserva.expires_at <= now() then
+    update public.reservas
+       set status = 'expired',
+           updated_at = now()
+     where id = v_reserva.id;
+    v_reserva.status := 'expired';
+  end if;
+
+  return jsonb_build_object(
+    'id', v_reserva.id,
+    'status', v_reserva.status,
+    'expires_at', v_reserva.expires_at,
+    'total', v_reserva.total,
+    'confirmed_at', v_reserva.confirmed_at,
+    'cancelled_at', v_reserva.cancelled_at
+  );
+end;
+$$;
+
 create or replace function public.registrar_solicitud(p_producto_id uuid)
 returns boolean
 language plpgsql
@@ -751,12 +1200,14 @@ revoke all on function public.cancelar_reserva(uuid, uuid) from public;
 revoke all on function public.confirmar_reserva(uuid) from public;
 revoke all on function public.confirmar_reserva(uuid) from anon;
 revoke all on function public.expirar_reservas() from public;
+revoke all on function public.estado_reserva(uuid, uuid) from public;
 revoke all on function public.registrar_solicitud(uuid) from public;
 
 grant execute on function public.crear_reserva(uuid, jsonb, integer) to anon, authenticated;
 grant execute on function public.cancelar_reserva(uuid, uuid) to anon, authenticated;
 grant execute on function public.confirmar_reserva(uuid) to authenticated;
 grant execute on function public.expirar_reservas() to anon, authenticated;
+grant execute on function public.estado_reserva(uuid, uuid) to anon, authenticated;
 grant execute on function public.registrar_solicitud(uuid) to anon, authenticated;
 
 -- ─── Realtime de disponibilidad ─────────────────────────────────────────────
@@ -866,6 +1317,15 @@ begin
          and tablename = 'guias_tallas'
     ) then
       alter publication supabase_realtime add table public.guias_tallas;
+    end if;
+
+    if not exists (
+      select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'taxonomias'
+    ) then
+      alter publication supabase_realtime add table public.taxonomias;
     end if;
   end if;
 end $$;
