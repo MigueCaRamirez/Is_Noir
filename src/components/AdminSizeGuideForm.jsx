@@ -5,12 +5,17 @@ import {
   LoaderCircle,
   Ruler,
   ShieldCheck,
+  Trash2,
   UploadCloud,
   X,
 } from 'lucide-react'
 import { resolveProductImage } from '../lib/format'
 import { updateSizeGuide } from '../services/sizeGuideService'
-import { uploadSizeGuideImage, validateProductImage } from '../services/storageService'
+import {
+  deleteProductImageByUrl,
+  uploadSizeGuideImage,
+  validateProductImage,
+} from '../services/storageService'
 
 export default function AdminSizeGuideForm({ tipo, guide, onSaved, onCancel }) {
   const [form, setForm] = useState({
@@ -61,6 +66,13 @@ export default function AdminSizeGuideForm({ tipo, guide, onSaved, onCancel }) {
     }
   }
 
+  const removeImage = () => {
+    setImageFile(null)
+    setPreviewUrl('')
+    setForm((current) => ({ ...current, imagen_url: '' }))
+    setError('')
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (!form.texto.trim() && !selectedPreview) {
@@ -81,6 +93,11 @@ export default function AdminSizeGuideForm({ tipo, guide, onSaved, onCancel }) {
         texto: form.texto,
         imagen_url: imagenUrl,
       })
+
+      if (guide?.imagen_url && guide.imagen_url !== saved.imagen_url) {
+        deleteProductImageByUrl(guide.imagen_url).catch(() => {})
+      }
+
       onSaved?.(saved)
     } catch (submitError) {
       setError(submitError.message || 'No pudimos guardar la guía de tallas.')
@@ -172,10 +189,22 @@ export default function AdminSizeGuideForm({ tipo, guide, onSaved, onCancel }) {
                   <span className="admin-upload__empty">
                     <UploadCloud size={28} strokeWidth={1.2} />
                     <strong>Subir infografía</strong>
-                    <small>JPG, PNG, WebP o AVIF · máx. 6 MB</small>
+                    <small>JPG, PNG, WebP o AVIF · máx. 10 MB</small>
                   </span>
                 )}
               </label>
+
+              {selectedPreview ? (
+                <button
+                  type="button"
+                  className="admin-button admin-button--ghost admin-size-guide-form__remove"
+                  onClick={removeImage}
+                  disabled={saving}
+                >
+                  <Trash2 size={14} />
+                  Eliminar imagen asignada
+                </button>
+              ) : null}
 
               <div className="admin-size-guide-form__note">
                 <Ruler size={18} strokeWidth={1.3} />
@@ -187,7 +216,7 @@ export default function AdminSizeGuideForm({ tipo, guide, onSaved, onCancel }) {
 
               <div className="admin-form__security">
                 <ShieldCheck size={13} strokeWidth={1.4} />
-                Las guías son públicas para lectura y solo el equipo puede editarlas.
+                La imagen se sube a Cloudinary con firma temporal. Solo el equipo puede editar la guía.
               </div>
             </div>
           </div>

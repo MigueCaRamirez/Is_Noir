@@ -260,7 +260,7 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
                   <span className="admin-upload__empty">
                     <UploadCloud size={28} strokeWidth={1.2} />
                     <strong>Subir imagen</strong>
-                    <small>JPG, PNG, WebP o AVIF · máx. 6 MB</small>
+                    <small>JPG, PNG, WebP o AVIF · máx. 10 MB</small>
                   </span>
                 )}
               </label>
@@ -292,7 +292,7 @@ export default function AdminNewsForm({ initialNews = null, onSaved, onCancel })
 
               <div className="admin-form__security">
                 <ShieldCheck size={13} strokeWidth={1.4} />
-                La imagen se guarda en el bucket público con escritura protegida por RLS.
+                La imagen se sube a Cloudinary con una firma temporal generada por Vercel.
               </div>
             </div>
           </div>
