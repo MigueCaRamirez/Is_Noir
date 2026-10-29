@@ -161,9 +161,6 @@ export default function Footer({
       <div className="site-footer__bottom">
         <span>© {new Date().getFullYear()} IS NOIR. Todos los derechos reservados.</span>
         <span className="site-footer__tagline">Hecho con intención en Colombia</span>
-        <button type="button" onClick={onExplore} className="site-footer__top-link">
-          Volver a la colección ↑
-        </button>
       </div>
     </footer>
   )

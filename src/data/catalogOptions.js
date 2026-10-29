@@ -66,4 +66,8 @@ export const STORE_SOCIALS = [
     label: 'Instagram',
     href: 'https://www.instagram.com/isnoir_2006?utm_source=ig_web_button_share_sheet&obrf=ZDNlZDc0MzIxNw==',
   },
+  {
+    label: 'TikTok',
+    href: 'https://www.tiktok.com/@is.noir4?is_from_webapp=1&sender_device=pc',
+  },
 ]

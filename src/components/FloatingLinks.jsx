@@ -36,6 +36,7 @@ function TikTokIcon() {
 }
 
 const INSTAGRAM = STORE_SOCIALS.find((social) => social.label === 'Instagram')
+const TIKTOK = STORE_SOCIALS.find((social) => social.label === 'TikTok')
 
 export default function FloatingLinks() {
   const [open, setOpen] = useState(false)
@@ -106,13 +107,20 @@ export default function FloatingLinks() {
           <small className="floating-links__soon">Próximamente</small>
         </div>
 
-        <div className="floating-links__item is-disabled" aria-disabled="true">
-          <span className="floating-links__icon">
-            <TikTokIcon />
-          </span>
-          <span>TikTok</span>
-          <small className="floating-links__soon">Próximamente</small>
-        </div>
+        {TIKTOK ? (
+          <a
+            className="floating-links__item"
+            href={TIKTOK.href}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setOpen(false)}
+          >
+            <span className="floating-links__icon">
+              <TikTokIcon />
+            </span>
+            <span>TikTok</span>
+          </a>
+        ) : null}
       </nav>
 
       <button
