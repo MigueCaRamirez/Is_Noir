@@ -662,11 +662,6 @@ export function CartProvider({ children }) {
     setItems((current) => current.filter((item) => item.id !== lineId))
   }, [])
 
-  const clearCart = useCallback(() => {
-    resetAttempts()
-    setItems([])
-  }, [])
-
   const openCart = useCallback(() => setIsCartOpen(true), [])
   const closeCart = useCallback(() => setIsCartOpen(false), [])
   const renewReservation = useCallback(() => {
