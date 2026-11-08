@@ -297,7 +297,7 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
             </h2>
             <p className="product-modal__price">{formatCOP(product.precio)}</p>
             <p className="product-modal__description">
-              {COLLECTION_COPY[product.coleccion]
+              {product.descripcion || COLLECTION_COPY[product.coleccion]
                 || 'Una pieza elegida del universo IS NOIR, pensada para acompañarte.'}
             </p>
 
