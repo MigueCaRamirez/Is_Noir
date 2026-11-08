@@ -287,13 +287,28 @@ export function CartProvider({ children }) {
             const reservationId = String(payload.new?.id)
             const status = String(payload.new?.status || '')
             if (!reservationId || reservationId !== reservation.id) return
-            if (status === 'completed' || status === 'cancelled') {
+            if (status === 'completed') {
+              // Vendido: quitar productos del carrito y marcar como vendido.
               setReservation((current) =>
                 current.id === reservationId
-                  ? { ...EMPTY_RESERVATION, status }
+                  ? { ...EMPTY_RESERVATION, status: 'completed' }
                   : current,
               )
               setItems([])
+              notifyAvailabilityChange()
+            } else if (status === 'cancelled') {
+              // Cancelado: quitar solo el apartado, dejar los productos en el carrito.
+              setReservation((current) =>
+                current.id === reservationId
+                  ? {
+                      ...current,
+                      status: 'cancelled',
+                      expiresAt: null,
+                      secondsLeft: 0,
+                      syncing: false,
+                    }
+                  : current,
+              )
               notifyAvailabilityChange()
             }
           },
@@ -328,13 +343,26 @@ export function CartProvider({ children }) {
           cartTokenRef.current,
         )
         if (cancelled || !data) return
-        if (data.status !== 'active') {
+        if (data.status === 'completed') {
           setReservation((current) =>
             current.id === reservation.id
-              ? { ...EMPTY_RESERVATION, status: data.status }
+              ? { ...EMPTY_RESERVATION, status: 'completed' }
               : current,
           )
           setItems([])
+          notifyAvailabilityChange()
+        } else if (data.status === 'cancelled') {
+          setReservation((current) =>
+            current.id === reservation.id
+              ? {
+                  ...current,
+                  status: 'cancelled',
+                  expiresAt: null,
+                  secondsLeft: 0,
+                  syncing: false,
+                }
+              : current,
+          )
           notifyAvailabilityChange()
         }
       } catch {
@@ -362,13 +390,26 @@ export function CartProvider({ children }) {
           cartTokenRef.current,
         )
         if (cancelled || !data) return
-        if (data.status !== 'active') {
+        if (data.status === 'completed') {
           setReservation((current) =>
             current.id === reservation.id
-              ? { ...EMPTY_RESERVATION, status: data.status }
+              ? { ...EMPTY_RESERVATION, status: 'completed' }
               : current,
           )
           setItems([])
+          notifyAvailabilityChange()
+        } else if (data.status === 'cancelled') {
+          setReservation((current) =>
+            current.id === reservation.id
+              ? {
+                  ...current,
+                  status: 'cancelled',
+                  expiresAt: null,
+                  secondsLeft: 0,
+                  syncing: false,
+                }
+              : current,
+          )
           notifyAvailabilityChange()
         }
       } catch {
