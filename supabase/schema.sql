@@ -24,6 +24,7 @@ create table if not exists public.productos (
   coleccion text not null,
   tipo text not null,
   subcategoria text,
+  descripcion text,
   imagen_url text,
   imagenes_urls text[] not null default '{}'::text[],
   imagen_enfoque text not null default 'center',
@@ -63,6 +64,8 @@ alter table public.productos
   add column if not exists talla_unica boolean not null default false;
 alter table public.productos
   add column if not exists tallas_stock jsonb not null default '{}'::jsonb;
+alter table public.productos
+  add column if not exists descripcion text;
 
 -- El catálogo ahora es dinámico: las colecciones y los tipos se administran
 -- desde la tabla taxonomias. Retiramos las restricciones fijas anteriores.

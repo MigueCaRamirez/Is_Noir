@@ -30,6 +30,7 @@ const DEFAULT_FORM = {
   coleccion: 'Old Money',
   tipo: 'Ropa',
   subcategoria: '',
+  descripcion: '',
   borrador: false,
   es_novedad: false,
   talla_unica: false,
@@ -96,6 +97,7 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
           coleccion: initialProduct.coleccion ?? 'Old Money',
           tipo: initialProduct.tipo ?? 'Ropa',
           subcategoria: initialProduct.subcategoria ?? '',
+          descripcion: initialProduct.descripcion ?? '',
           borrador: Boolean(initialProduct.borrador),
           es_novedad: Boolean(initialProduct.es_novedad),
           talla_unica: initialSingle,
@@ -400,6 +402,7 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
         coleccion: form.coleccion,
         tipo: form.tipo,
         subcategoria: form.subcategoria,
+        descripcion: form.descripcion,
         imagenes_urls: nextImages,
         imagen_url: nextImages[0],
         imagen_enfoque: form.imagen_enfoque,
@@ -502,6 +505,20 @@ export default function AdminProductForm({ initialProduct = null, onSaved, onCan
                 <small className="admin-field__hint">
                   {taxonomyError
                     || 'Las colecciones, tipos y subcategorías se administran en Configuración de Catálogo.'}
+                </small>
+              </label>
+
+              <label className="admin-field admin-field--wide">
+                <span>Descripción</span>
+                <textarea
+                  value={form.descripcion}
+                  onChange={(event) => updateField('descripcion', event.target.value)}
+                  placeholder="Describe los detalles, materiales o cuidados de la pieza…"
+                  maxLength={500}
+                  rows={3}
+                />
+                <small className="admin-field__hint">
+                  Texto opcional que se mostrará en la ficha de la pieza.
                 </small>
               </label>
 

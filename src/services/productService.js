@@ -109,6 +109,7 @@ export function sanitizeProduct(payload) {
     coleccion: cleanText(payload.coleccion, 80),
     tipo: cleanText(payload.tipo, 80),
     subcategoria: cleanText(payload.subcategoria, 80) || null,
+    descripcion: cleanText(payload.descripcion, 500) || null,
     imagen_url: images[0] || null,
     imagenes_urls: images,
     imagen_enfoque: normalizeImageFocus(payload.imagen_enfoque),
