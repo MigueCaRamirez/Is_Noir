@@ -519,6 +519,24 @@ export function CartProvider({ children }) {
     setItems((current) => current.filter((item) => item.id !== lineId))
   }, [])
 
+  // Sincronizar el apartado activo cuando cambien los items del carrito.
+  // Si el cliente agrega, quita o cambia cantidades después de crear el
+  // apartado, se actualiza la reserva en la BD para reflejar los cambios.
+  useEffect(() => {
+    if (!items.length) return
+    if (reservation.status !== 'active' || !reservation.id) return
+
+    const timer = setTimeout(async () => {
+      try {
+        await reserveItems()
+      } catch {
+        // Si falla la sincronización, el apartado se mantiene como está.
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [itemsSignature, reservation.id, reserveItems])
+
   // Temporizador del apartado activo: cuenta regresiva en tiempo real.
   useEffect(() => {
     if (reservation.status !== 'active' || !reservation.id || !reservation.expiresAt) {
