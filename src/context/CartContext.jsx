@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { SINGLE_SIZE } from '../data/catalogOptions'
 import { getProductImages, getSizeAvailableStock, isSingleSize } from '../lib/format'
+import { supabase } from '../lib/supabaseClient'
 import {
   cancelReservation,
   createReservation,
@@ -18,6 +19,7 @@ import {
   getCartToken,
   INITIAL_RESERVATION_MINUTES,
   RENEWAL_RESERVATION_MINUTES,
+  registerProductInterest,
 } from '../services/reservationService'
 
 const CartContext = createContext(null)
@@ -25,7 +27,9 @@ const STORAGE_KEY = 'isnoir-cart-v1'
 const RESERVATION_STORAGE_KEY = 'isnoir-reservation-v1'
 const RESERVED_UNTIL_KEY = 'isnoir-reserved-until-v1'
 const ATTEMPTS_KEY = 'isnoir-reservation-attempts-v1'
+const BLOCK_UNTIL_KEY = 'isnoir-reservation-block-until-v1'
 const MAX_NEW_RESERVATIONS = 3
+const BLOCK_HOURS = 12
 
 function readStoredCart() {
   try {
@@ -82,6 +86,39 @@ function writeAttempts(value) {
 
 function resetAttempts() {
   writeAttempts(0)
+}
+
+function readBlockUntil() {
+  try {
+    const value = window.localStorage.getItem(BLOCK_UNTIL_KEY)
+    if (!value) return 0
+    const ts = Number(value)
+    return Number.isFinite(ts) && ts > Date.now() ? ts : 0
+  } catch {
+    return 0
+  }
+}
+
+function writeBlockUntil(timestamp: number) {
+  try {
+    if (timestamp > Date.now()) {
+      window.localStorage.setItem(BLOCK_UNTIL_KEY, String(timestamp))
+    } else {
+      window.localStorage.removeItem(BLOCK_UNTIL_KEY)
+    }
+  } catch {
+    // El bloqueo se mantiene en memoria si el storage está restringido.
+  }
+}
+
+function isBlocked() {
+  return readBlockUntil() > 0
+}
+
+function remainingBlockMinutes() {
+  const until = readBlockUntil()
+  if (!until) return 0
+  return Math.max(0, Math.ceil((until - Date.now()) / 60000))
 }
 
 function minutesForAttempt(attempts) {
@@ -177,6 +214,7 @@ export function CartProvider({ children }) {
   const [reservation, setReservation] = useState(() =>
     readStoredReservation(cartTokenRef.current) ?? EMPTY_RESERVATION,
   )
+  const [blockedUntil, setBlockedUntil] = useState(readBlockUntil())
   const [syncNonce, setSyncNonce] = useState(0)
   const reservationRef = useRef(reservation)
   const itemsRef = useRef(items)
@@ -218,27 +256,121 @@ export function CartProvider({ children }) {
     [items],
   )
 
+  // Valida que los items del carrito sigan estando disponibles (no borrador, stock > 0).
+  // Se ejecuta al montar y cuando cambian los items o la disponibilidad.
   useEffect(() => {
-    const sequence = requestSequence.current + 1
-    requestSequence.current = sequence
     let cancelled = false
 
-    if (!items.length) {
-      const previous = reservationRef.current
-      skipInitialSyncRef.current = false
-      setReservation(EMPTY_RESERVATION)
-      resetAttempts()
-      if (previous.id && previous.status === 'active') {
-        cancelReservation(previous.id, cartTokenRef.current)
-          .then(notifyAvailabilityChange)
-          .catch(() => {})
+    const validateItems = async () => {
+      if (!items.length) return
+
+      const ids = items.map((item) => item.productoId)
+
+      const { data: products, error } = await supabase
+        .from('productos')
+        .select('id, borrador, stock, tallas_stock, talla_unica')
+        .in('id', ids)
+
+      if (error || !products) return
+
+      const unavailable = new Set()
+      for (const product of products) {
+        if (product.borrador) {
+          unavailable.add(product.id)
+          continue
+        }
+        const stock = product.talla_unica
+          ? Number(product.stock || 0)
+          : Object.values(product.tallas_stock || {}).reduce(
+              (sum, v) => sum + Number(v || 0),
+              0,
+            )
+        if (stock <= 0) unavailable.add(product.id)
       }
-      return undefined
+
+      if (unavailable.size > 0 && !cancelled) {
+        setItems((current) =>
+          current.filter((item) => !unavailable.has(item.productoId)),
+        )
+        notifyAvailabilityChange()
+      }
     }
 
-    if (skipInitialSyncRef.current) {
-      skipInitialSyncRef.current = false
-      return undefined
+    validateItems()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsSignature])
+
+  // Suscripción en tiempo real: si el admin pone un producto como borrador o
+  // confirma una reserva como vendida, lo quitamos del carrito del cliente.
+  useEffect(() => {
+    if (!supabase) return undefined
+
+    const channel = supabase
+      .channel('isnoir-cart-live')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'productos',
+          filter: 'borrador=eq.true',
+        },
+        (payload) => {
+          const productId = String(payload.new?.id)
+          if (!productId) return
+          setItems((current) => {
+            const next = current.filter((item) => item.productoId !== productId)
+            if (next.length !== current.length) {
+              notifyAvailabilityChange()
+            }
+            return next
+          })
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'reservas',
+          filter: 'status=eq.completed',
+        },
+        (payload) => {
+          const reservationId = String(payload.new?.id)
+          if (!reservationId || reservationId !== reservation.id) return
+          setReservation((current) =>
+            current.id === reservationId
+              ? { ...EMPTY_RESERVATION, status: 'completed' }
+              : current,
+          )
+          setItems([])
+          resetAttempts()
+          notifyAvailabilityChange()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservation.id])
+
+  const reserveItems = useCallback(async () => {
+    if (!items.length) {
+      setError('Tu selección está vacía.')
+      return false
+    }
+
+    if (isBlocked()) {
+      const minutes = remainingBlockMinutes()
+      setError(
+        `Has alcanzado el límite de apartados. Intenta de nuevo en ${minutes} minuto(s).`,
+      )
+      return false
     }
 
     const previous = reservationRef.current
@@ -248,13 +380,16 @@ export function CartProvider({ children }) {
       remainingSeconds(previous.expiresAt) > 0
 
     if (!previousActive && readAttempts() >= MAX_NEW_RESERVATIONS) {
+      const blockUntil = Date.now() + BLOCK_HOURS * 60 * 60 * 1000
+      writeBlockUntil(blockUntil)
+      setBlockedUntil(blockUntil)
       setReservation({
         ...EMPTY_RESERVATION,
         status: 'limit',
         error:
-          'Alcanzaste el límite de apartados de esta sesión. Escríbenos por WhatsApp para completar tu compra.',
+          'Alcanzaste el límite de 3 apartados de esta sesión. Intenta de nuevo en 12 horas.',
       })
-      return undefined
+      return false
     }
 
     setReservation((current) =>
@@ -263,71 +398,57 @@ export function CartProvider({ children }) {
         : { ...current, status: 'syncing', syncing: true, error: '' },
     )
 
-    const timer = window.setTimeout(async () => {
-      const attemptsBefore = readAttempts()
-      try {
-        const data = await createReservation(
-          cartTokenRef.current,
-          items,
-          previousActive ? undefined : minutesForAttempt(attemptsBefore),
-        )
-        if (cancelled || requestSequence.current !== sequence) {
-          if (data?.id && !itemsRef.current.length) {
-            cancelReservation(data.id, cartTokenRef.current).catch(() => {})
-          }
-          return
-        }
+    try {
+      const data = await createReservation(
+        cartTokenRef.current,
+        items,
+        previousActive ? undefined : minutesForAttempt(readAttempts()),
+      )
 
-        const isNewReservation = Boolean(data.is_new) || data.id !== previous.id
-        if (isNewReservation) {
-          writeAttempts(Math.max(1, attemptsBefore + 1))
-        }
-
-        setReservation({
-          id: data.id,
-          status: 'active',
-          expiresAt: data.expires_at,
-          secondsLeft: remainingSeconds(data.expires_at),
-          total: Number(data.total) || 0,
-          error: '',
-          syncing: false,
-        })
-        notifyAvailabilityChange()
-      } catch (error) {
-        if (cancelled || requestSequence.current !== sequence) return
-
-        if (previousActive) {
-          // No liberamos el apartado anterior: el carrito conserva las piezas
-          // que ya estaban protegidas y solo mostramos el aviso de la nueva.
-          setReservation((current) =>
-            current.id === previous.id
-              ? {
-                  ...current,
-                  status: 'active',
-                  syncing: false,
-                  error: error.message || 'No pudimos ampliar el apartado.',
-                }
-              : { ...EMPTY_RESERVATION, status: 'error', error: error.message },
-          )
-        } else {
-          setReservation({
-            ...EMPTY_RESERVATION,
-            status: 'error',
-            error: error.message || 'No pudimos apartar tus piezas en este momento.',
-          })
-        }
-        notifyAvailabilityChange()
+      const isNewReservation = Boolean(data.is_new) || data.id !== previous.id
+      if (isNewReservation) {
+        writeAttempts(Math.max(1, readAttempts() + 1))
       }
-    }, 420)
 
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
+      setReservation({
+        id: data.id,
+        status: 'active',
+        expiresAt: data.expires_at,
+        secondsLeft: remainingSeconds(data.expires_at),
+        total: Number(data.total) || 0,
+        error: '',
+        syncing: false,
+      })
+      notifyAvailabilityChange()
+      return true
+    } catch (error) {
+      if (previousActive) {
+        setReservation((current) =>
+          current.id === previous.id
+            ? {
+                ...current,
+                status: 'active',
+                syncing: false,
+                error: error.message || 'No pudimos ampliar el apartado.',
+              }
+            : { ...EMPTY_RESERVATION, status: 'error', error: error.message },
+        )
+      } else {
+        setReservation({
+          ...EMPTY_RESERVATION,
+          status: 'error',
+          error: error.message || 'No pudimos apartar tus piezas en este momento.',
+        })
+      }
+      notifyAvailabilityChange()
+      return false
     }
-    // `items` se lee dentro del efecto; la firma evita sincronizaciones
-    // innecesarias cuando cambia una referencia sin cambiar la selección.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemsSignature, syncNonce])
+  }, [items, isBlocked, remainingBlockMinutes])
+
+  const clearCart = useCallback(() => {
+    resetAttempts()
+    setItems([])
+  }, [])
 
   useEffect(() => {
     if (reservation.status !== 'active' || !reservation.id || !reservation.expiresAt) {
@@ -613,8 +734,12 @@ export function CartProvider({ children }) {
       reservation,
       renewReservation,
       releaseReservation,
+      reserveItems,
       cartToken: cartTokenRef.current,
       isReserved: reservation.status === 'active',
+      isBlocked: isBlocked(),
+      blockedUntil,
+      error: reservation.error || '',
     }),
     [
       items,
@@ -631,6 +756,8 @@ export function CartProvider({ children }) {
       reservation,
       renewReservation,
       releaseReservation,
+      reserveItems,
+      blockedUntil,
     ],
   )
 

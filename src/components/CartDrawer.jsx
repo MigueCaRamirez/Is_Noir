@@ -41,8 +41,11 @@ export default function CartDrawer({ onGoToShop }) {
     removeItem,
     clearCart,
     reservation,
-    renewReservation,
+    reserveItems,
     releaseReservation,
+    isBlocked,
+    blockedUntil,
+    error,
   } = useCart()
 
   useEffect(() => {
@@ -78,10 +81,6 @@ export default function CartDrawer({ onGoToShop }) {
     ? { id: reservation.id, expiresAt: reservation.expiresAt }
     : null
   const whatsappUrl = buildWhatsAppUrl(items, { reservation: activeReservation })
-
-  const refreshReservation = () => {
-    renewReservation()
-  }
 
   const cancelReservation = async () => {
     try {
@@ -299,20 +298,44 @@ export default function CartDrawer({ onGoToShop }) {
                   <ShoppingBag size={17} strokeWidth={1.5} />
                   Pedido confirmado
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  className="button-primary cart-whatsapp"
-                  onClick={refreshReservation}
-                  disabled={reservation.status === 'syncing'}
-                >
-                  <RefreshCw
-                    size={17}
-                    strokeWidth={1.5}
-                    className={reservation.status === 'syncing' ? 'animate-spin' : ''}
-                  />
-                  {reservation.status === 'syncing' ? 'Reservando stock…' : 'Renovar apartado'}
+              ) : isBlocked() ? (
+                <button type="button" className="button-primary cart-whatsapp" disabled>
+                  <Clock3 size={17} strokeWidth={1.5} />
+                  Límite alcanzado · Vuelve en {Math.ceil(
+                    (blockedUntil - Date.now()) / 3600000,
+                  )} hora(s)
                 </button>
+              ) : activeReservation ? null : (
+                <>
+                  {items.length > 0 ? (
+                    <button
+                      type="button"
+                      className="button-primary cart-whatsapp"
+                      onClick={async () => {
+                        const ok = await reserveItems()
+                        if (ok) closeCart()
+                      }}
+                      disabled={reservation.status === 'syncing'}
+                    >
+                      {reservation.status === 'syncing' ? (
+                        <>
+                          <RefreshCw size={17} strokeWidth={1.5} className="animate-spin" />
+                          Apartando tus piezas…
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={17} strokeWidth={1.5} /> Apartar productos
+                        </>
+                      )}
+                    </button>
+                  ) : null}
+                  {error ? (
+                    <button type="button" className="button-primary cart-whatsapp" disabled>
+                      <Clock3 size={17} strokeWidth={1.5} />
+                      {error}
+                    </button>
+                  ) : null}
+                </>
               )}
 
               {!activeReservation && reservation.status !== 'completed' ? (

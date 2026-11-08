@@ -27,7 +27,7 @@ import {
   resolveProductImage,
 } from '../lib/format'
 import { buildSingleProductWhatsAppUrl } from '../services/orderService'
-import { registerProductInterest } from '../services/reservationService'
+import { registerCartInterest } from '../services/reservationService'
 import { fallbackSizeGuide } from '../services/sizeGuideService'
 import { Butterfly } from './Logo'
 
@@ -126,12 +126,6 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
   }, [activeImage, images.length])
 
   useEffect(() => {
-    if (!product?.id) return undefined
-    registerProductInterest(product.id).catch(() => {})
-    return undefined
-  }, [product?.id])
-
-  useEffect(() => {
     if (!product) return undefined
 
     const previousOverflow = document.body.style.overflow
@@ -187,6 +181,7 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
       }
 
       setError('')
+      registerCartInterest([product]).catch(() => {})
       onClose?.()
       openCart()
     } catch (addError) {
