@@ -160,7 +160,9 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
       return
     }
 
-    setAllocations((current) => buildAllocations(clamped, selectedSize, current))
+    // Al cambiar la cantidad, se limpian las asignaciones para que el cliente
+    // distribuya manualmente las unidades por talla.
+    setAllocations({})
   }
 
   useEffect(() => {
@@ -175,13 +177,6 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
   useEffect(() => {
     setQuantity((current) => Math.min(Math.max(1, current), maxQuantity))
   }, [maxQuantity])
-
-  useEffect(() => {
-    if (single || quantity <= 1) return
-    setAllocations((current) => buildAllocations(quantity, selectedSize, current))
-    // Solo se reajusta cuando cambia el inventario visible o la pieza.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maxQuantity, product?.id])
 
   useEffect(() => {
     if (activeImage >= images.length) setActiveImage(0)
