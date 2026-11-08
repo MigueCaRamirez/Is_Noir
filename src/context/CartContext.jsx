@@ -567,21 +567,27 @@ export function CartProvider({ children }) {
         const lineId = `${product.id}::${size}`
         const existingIndex = next.findIndex((item) => item.id === lineId)
         const existing = existingIndex >= 0 ? next[existingIndex] : null
-        const maxForLine = available + (existing?.cantidad ?? 0)
+        const alreadyInCart = existing?.cantidad ?? 0
+        const maxForLine = available
 
         if (maxForLine < 1) {
           throw new Error(`Esta pieza no tiene stock disponible en talla ${size}.`)
         }
-        if (quantity > maxForLine) {
+
+        const totalAfterAdding = alreadyInCart + quantity
+        if (totalAfterAdding > maxForLine) {
+          const remaining = maxForLine - alreadyInCart
           throw new Error(
-            `Solo quedan ${maxForLine} unidad(es) disponibles en talla ${size}.`,
+            remaining <= 0
+              ? `Ya alcanzaste el stock disponible de talla ${size} en tu carrito.`
+              : `Solo quedan ${remaining} unidad(es) disponibles en talla ${size}.`,
           )
         }
 
         if (existing) {
           next[existingIndex] = {
             ...existing,
-            cantidad: existing.cantidad + quantity,
+            cantidad: totalAfterAdding,
             stock: maxForLine,
             stock_disponible: available,
           }
