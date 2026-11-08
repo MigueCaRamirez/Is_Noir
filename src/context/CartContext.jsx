@@ -19,7 +19,6 @@ import {
   getCartToken,
   INITIAL_RESERVATION_MINUTES,
   RENEWAL_RESERVATION_MINUTES,
-  registerProductInterest,
 } from '../services/reservationService'
 
 const CartContext = createContext(null)
@@ -262,37 +261,41 @@ export function CartProvider({ children }) {
     let cancelled = false
 
     const validateItems = async () => {
-      if (!items.length) return
+      if (!items.length || !supabase) return
 
-      const ids = items.map((item) => item.productoId)
+      try {
+        const ids = items.map((item) => item.productoId)
 
-      const { data: products, error } = await supabase
-        .from('productos')
-        .select('id, borrador, stock, tallas_stock, talla_unica')
-        .in('id', ids)
+        const { data: products, error } = await supabase
+          .from('productos')
+          .select('id, borrador, stock, tallas_stock, talla_unica')
+          .in('id', ids)
 
-      if (error || !products) return
+        if (error || !products || cancelled) return
 
-      const unavailable = new Set()
-      for (const product of products) {
-        if (product.borrador) {
-          unavailable.add(product.id)
-          continue
+        const unavailable = new Set()
+        for (const product of products) {
+          if (product.borrador) {
+            unavailable.add(product.id)
+            continue
+          }
+          const stock = product.talla_unica
+            ? Number(product.stock || 0)
+            : Object.values(product.tallas_stock || {}).reduce(
+                (sum, v) => sum + Number(v || 0),
+                0,
+              )
+          if (stock <= 0) unavailable.add(product.id)
         }
-        const stock = product.talla_unica
-          ? Number(product.stock || 0)
-          : Object.values(product.tallas_stock || {}).reduce(
-              (sum, v) => sum + Number(v || 0),
-              0,
-            )
-        if (stock <= 0) unavailable.add(product.id)
-      }
 
-      if (unavailable.size > 0 && !cancelled) {
-        setItems((current) =>
-          current.filter((item) => !unavailable.has(item.productoId)),
-        )
-        notifyAvailabilityChange()
+        if (unavailable.size > 0 && !cancelled) {
+          setItems((current) =>
+            current.filter((item) => !unavailable.has(item.productoId)),
+          )
+          notifyAvailabilityChange()
+        }
+      } catch {
+        // Si falla la validación, dejamos los items como están para no bloquear al usuario.
       }
     }
 
@@ -308,53 +311,64 @@ export function CartProvider({ children }) {
   useEffect(() => {
     if (!supabase) return undefined
 
-    const channel = supabase
-      .channel('isnoir-cart-live')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'productos',
-          filter: 'borrador=eq.true',
-        },
-        (payload) => {
-          const productId = String(payload.new?.id)
-          if (!productId) return
-          setItems((current) => {
-            const next = current.filter((item) => item.productoId !== productId)
-            if (next.length !== current.length) {
-              notifyAvailabilityChange()
-            }
-            return next
-          })
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'reservas',
-          filter: 'status=eq.completed',
-        },
-        (payload) => {
-          const reservationId = String(payload.new?.id)
-          if (!reservationId || reservationId !== reservation.id) return
-          setReservation((current) =>
-            current.id === reservationId
-              ? { ...EMPTY_RESERVATION, status: 'completed' }
-              : current,
-          )
-          setItems([])
-          resetAttempts()
-          notifyAvailabilityChange()
-        },
-      )
-      .subscribe()
+    let channel = null
+    try {
+      channel = supabase
+        .channel('isnoir-cart-live')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'productos',
+            filter: 'borrador=eq.true',
+          },
+          (payload) => {
+            const productId = String(payload.new?.id)
+            if (!productId) return
+            setItems((current) => {
+              const next = current.filter((item) => item.productoId !== productId)
+              if (next.length !== current.length) {
+                notifyAvailabilityChange()
+              }
+              return next
+            })
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'reservas',
+            filter: 'status=eq.completed',
+          },
+          (payload) => {
+            const reservationId = String(payload.new?.id)
+            if (!reservationId || reservationId !== reservation.id) return
+            setReservation((current) =>
+              current.id === reservationId
+                ? { ...EMPTY_RESERVATION, status: 'completed' }
+                : current,
+            )
+            setItems([])
+            resetAttempts()
+            notifyAvailabilityChange()
+          },
+        )
+        .subscribe()
+    } catch {
+      // Si falla la suscripción, seguimos funcionando sin tiempo real.
+    }
 
     return () => {
-      supabase.removeChannel(channel)
+      if (channel && supabase) {
+        try {
+          supabase.removeChannel(channel)
+        } catch {
+          // Ignorar errores al limpiar
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservation.id])
