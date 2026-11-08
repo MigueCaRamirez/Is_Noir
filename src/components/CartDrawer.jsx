@@ -312,8 +312,7 @@ export default function CartDrawer({ onGoToShop }) {
                       type="button"
                       className="button-primary cart-whatsapp"
                       onClick={async () => {
-                        const ok = await reserveItems()
-                        if (ok) closeCart()
+                        await reserveItems()
                       }}
                       disabled={reservation.status === 'syncing'}
                     >
