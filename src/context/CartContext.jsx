@@ -14,7 +14,6 @@ import {
   cancelReservation,
   createReservation,
   expireReservations,
-  fetchReservationStatus,
   FINAL_RESERVATION_MINUTES,
   getCartToken,
   INITIAL_RESERVATION_MINUTES,
@@ -552,102 +551,7 @@ export function CartProvider({ children }) {
     return () => window.clearInterval(timer)
   }, [reservation.id, reservation.status, reservation.expiresAt])
 
-  // Revisa el estado de la reserva en la BD cada 5 segundos para detectar
-  // cambios hechos desde el admin (vendido, cancelado, expirado).
-  useEffect(() => {
-    if (reservation.status !== 'active' || !reservation.id) return undefined
 
-    const reservationId = reservation.id
-    let stopped = false
-
-    const checkStatus = async () => {
-      if (stopped) return
-      const data = await fetchReservationStatus(reservationId, cartTokenRef.current)
-      if (stopped || !data) return
-
-      if (data.status === 'cancelled') {
-        setReservation((current) =>
-          current.id === reservationId
-            ? {
-                ...current,
-                status: 'released',
-                secondsLeft: 0,
-                syncing: false,
-                error: '',
-              }
-            : current,
-        )
-        setItems([])
-        resetAttempts()
-        notifyAvailabilityChange()
-        return
-      }
-
-      if (data.status === 'completed') {
-        setReservation((current) =>
-          current.id === reservationId
-            ? {
-                ...current,
-                status: 'completed',
-                secondsLeft: 0,
-                syncing: false,
-                error: '',
-              }
-            : current,
-        )
-        setItems([])
-        resetAttempts()
-        notifyAvailabilityChange()
-        return
-      }
-
-      if (data.status === 'expired') {
-        setReservation((current) =>
-          current.id === reservationId
-            ? {
-                ...current,
-                status: 'expired',
-                secondsLeft: 0,
-                syncing: false,
-              }
-            : current,
-        )
-        notifyAvailabilityChange()
-        return
-      }
-
-      if (data.status === 'active' && data.expires_at) {
-        const seconds = remainingSeconds(data.expires_at)
-        setReservation((current) => {
-          if (current.id !== reservationId || current.status !== 'active') return current
-          if (seconds <= 0) return { ...current, status: 'expired', secondsLeft: 0 }
-          return {
-            ...current,
-            expiresAt: data.expires_at,
-            secondsLeft: seconds,
-            syncing: false,
-          }
-        })
-      }
-    }
-
-    checkStatus()
-    const timer = window.setInterval(checkStatus, 5000)
-    const onAvailability = () => checkStatus()
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') checkStatus()
-    }
-
-    window.addEventListener('isnoir:availability-changed', onAvailability)
-    document.addEventListener('visibilitychange', onVisibility)
-
-    return () => {
-      stopped = true
-      window.clearInterval(timer)
-      window.removeEventListener('isnoir:availability-changed', onAvailability)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [reservation.id, reservation.status])
 
   const subtotal = useMemo(
     () =>
