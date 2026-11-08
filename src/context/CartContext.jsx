@@ -259,11 +259,11 @@ export function CartProvider({ children }) {
             event: 'UPDATE',
             schema: 'public',
             table: 'productos',
-            filter: 'borrador=eq.true',
           },
           (payload) => {
             const productId = String(payload.new?.id)
-            if (!productId) return
+            const borrador = payload.new?.borrador
+            if (!productId || borrador !== true) return
             setItems((current) => {
               const next = current.filter((item) => item.productoId !== productId)
               if (next.length !== current.length) {
@@ -279,19 +279,21 @@ export function CartProvider({ children }) {
             event: 'UPDATE',
             schema: 'public',
             table: 'reservas',
-            filter: 'status=in.(completed,cancelled)',
           },
           (payload) => {
             const reservationId = String(payload.new?.id)
+            const status = String(payload.new?.status || '')
             if (!reservationId || reservationId !== reservation.id) return
-            setReservation((current) =>
-              current.id === reservationId
-                ? { ...EMPTY_RESERVATION, status: payload.new.status }
-                : current,
-            )
-            setItems([])
-            resetAttempts()
-            notifyAvailabilityChange()
+            if (status === 'completed' || status === 'cancelled') {
+              setReservation((current) =>
+                current.id === reservationId
+                  ? { ...EMPTY_RESERVATION, status }
+                  : current,
+              )
+              setItems([])
+              resetAttempts()
+              notifyAvailabilityChange()
+            }
           },
         )
         .subscribe()
