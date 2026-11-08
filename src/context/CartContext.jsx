@@ -245,6 +245,73 @@ export function CartProvider({ children }) {
     [items],
   )
 
+  // Suscripción en tiempo real: si el admin pone un producto como borrador o
+  // confirma una reserva como vendida / cancela un apartado, se refleja en el carrito.
+  useEffect(() => {
+    if (!supabase) return undefined
+
+    let channel = null
+    try {
+      channel = supabase
+        .channel('isnoir-cart-live')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'productos',
+            filter: 'borrador=eq.true',
+          },
+          (payload) => {
+            const productId = String(payload.new?.id)
+            if (!productId) return
+            setItems((current) => {
+              const next = current.filter((item) => item.productoId !== productId)
+              if (next.length !== current.length) {
+                notifyAvailabilityChange()
+              }
+              return next
+            })
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'reservas',
+            filter: 'status=in.(completed,cancelled)',
+          },
+          (payload) => {
+            const reservationId = String(payload.new?.id)
+            if (!reservationId || reservationId !== reservation.id) return
+            setReservation((current) =>
+              current.id === reservationId
+                ? { ...EMPTY_RESERVATION, status: payload.new.status }
+                : current,
+            )
+            setItems([])
+            resetAttempts()
+            notifyAvailabilityChange()
+          },
+        )
+        .subscribe()
+    } catch {
+      // Si falla la suscripción, seguimos funcionando sin tiempo real.
+    }
+
+    return () => {
+      if (channel && supabase) {
+        try {
+          supabase.removeChannel(channel)
+        } catch {
+          // Ignorar errores al limpiar
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservation.id])
+
   const reserveItems = useCallback(async () => {
     if (!items.length) return false
 
@@ -452,6 +519,135 @@ export function CartProvider({ children }) {
   const removeItem = useCallback((lineId) => {
     setItems((current) => current.filter((item) => item.id !== lineId))
   }, [])
+
+  // Temporizador del apartado activo: cuenta regresiva en tiempo real.
+  useEffect(() => {
+    if (reservation.status !== 'active' || !reservation.id || !reservation.expiresAt) {
+      return undefined
+    }
+
+    const reservationId = reservation.id
+    let expired = false
+
+    const tick = () => {
+      const seconds = remainingSeconds(reservation.expiresAt)
+      setReservation((current) => {
+        if (current.id !== reservationId || current.status !== 'active') return current
+        return { ...current, secondsLeft: seconds }
+      })
+
+      if (seconds <= 0 && !expired) {
+        expired = true
+        setReservation((current) =>
+          current.id === reservationId
+            ? { ...current, status: 'expired', secondsLeft: 0, syncing: false }
+            : current,
+        )
+        expireReservations().then(notifyAvailabilityChange).catch(() => {})
+      }
+    }
+
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [reservation.id, reservation.status, reservation.expiresAt])
+
+  // Revisa el estado de la reserva en la BD cada 5 segundos para detectar
+  // cambios hechos desde el admin (vendido, cancelado, expirado).
+  useEffect(() => {
+    if (reservation.status !== 'active' || !reservation.id) return undefined
+
+    const reservationId = reservation.id
+    let stopped = false
+
+    const checkStatus = async () => {
+      if (stopped) return
+      const data = await fetchReservationStatus(reservationId, cartTokenRef.current)
+      if (stopped || !data) return
+
+      if (data.status === 'cancelled') {
+        setReservation((current) =>
+          current.id === reservationId
+            ? {
+                ...current,
+                status: 'released',
+                secondsLeft: 0,
+                syncing: false,
+                error: '',
+              }
+            : current,
+        )
+        setItems([])
+        resetAttempts()
+        notifyAvailabilityChange()
+        return
+      }
+
+      if (data.status === 'completed') {
+        setReservation((current) =>
+          current.id === reservationId
+            ? {
+                ...current,
+                status: 'completed',
+                secondsLeft: 0,
+                syncing: false,
+                error: '',
+              }
+            : current,
+        )
+        setItems([])
+        resetAttempts()
+        notifyAvailabilityChange()
+        return
+      }
+
+      if (data.status === 'expired') {
+        setReservation((current) =>
+          current.id === reservationId
+            ? {
+                ...current,
+                status: 'expired',
+                secondsLeft: 0,
+                syncing: false,
+              }
+            : current,
+        )
+        notifyAvailabilityChange()
+        return
+      }
+
+      if (data.status === 'active' && data.expires_at) {
+        const seconds = remainingSeconds(data.expires_at)
+        setReservation((current) => {
+          if (current.id !== reservationId || current.status !== 'active') return current
+          if (seconds <= 0) return { ...current, status: 'expired', secondsLeft: 0 }
+          return {
+            ...current,
+            expiresAt: data.expires_at,
+            secondsLeft: seconds,
+            syncing: false,
+          }
+        })
+      }
+    }
+
+    checkStatus()
+    const timer = window.setInterval(checkStatus, 5000)
+    const onAvailability = () => checkStatus()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkStatus()
+    }
+
+    window.addEventListener('isnoir:availability-changed', onAvailability)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+      window.removeEventListener('isnoir:availability-changed', onAvailability)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [reservation.id, reservation.status])
 
   const subtotal = useMemo(
     () =>
