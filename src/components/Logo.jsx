@@ -32,7 +32,7 @@ export function Butterfly({ className = '' }) {
         </filter>
       </defs>
 
-      <!-- Cuerpo central -->
+      {/* Cuerpo central */}
       <path
         d="M100 40 Q100 100 100 160"
         fill="none"
@@ -41,7 +41,7 @@ export function Butterfly({ className = '' }) {
         opacity="0.9"
       />
 
-      <!-- Ala superior izquierda -->
+      {/* Ala superior izquierda */}
       <path
         d="M100 55 C60 20 20 30 25 70 C30 90 70 95 100 60"
         fill="url(#wingGrad)"
@@ -56,7 +56,7 @@ export function Butterfly({ className = '' }) {
         opacity="0.7"
       />
 
-      <!-- Ala superior derecha -->
+      {/* Ala superior derecha */}
       <path
         d="M100 55 C140 20 180 30 175 70 C170 90 130 95 100 60"
         fill="url(#wingGrad)"
@@ -71,7 +71,7 @@ export function Butterfly({ className = '' }) {
         opacity="0.7"
       />
 
-      <!-- Ala inferior izquierda -->
+      {/* Ala inferior izquierda */}
       <path
         d="M100 60 C70 80 40 110 45 140 C50 170 90 150 100 110"
         fill="url(#wingGrad)"
@@ -86,7 +86,7 @@ export function Butterfly({ className = '' }) {
         opacity="0.65"
       />
 
-      <!-- Ala inferior derecha -->
+      {/* Ala inferior derecha */}
       <path
         d="M100 60 C130 80 160 110 155 140 C150 170 110 150 100 110"
         fill="url(#wingGrad)"
@@ -101,11 +101,11 @@ export function Butterfly({ className = '' }) {
         opacity="0.65"
       />
 
-      <!-- Antenas -->
+      {/* Antenas */}
       <path d="M96 45 Q85 25 75 15" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.8" />
       <path d="M104 45 Q115 25 125 15" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.8" />
 
-      <!-- Detalles de venas -->
+      {/* Detalles de venas */}
       <g stroke="currentColor" strokeWidth="1" opacity="0.5">
         <path d="M100 60 Q85 50 70 55M100 60 Q115 50 130 55" />
         <path d="M100 75 Q90 85 80 95M100 75 Q110 85 120 95" />
