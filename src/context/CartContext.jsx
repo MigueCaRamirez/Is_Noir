@@ -351,6 +351,43 @@ export function CartProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservation.id, reservation.status, cartTokenRef.current])
 
+  // Respaldo: verificar estado de la reserva cada 30 segundos por si las
+  // suscripciones de Supabase no llegan (p. ej. pestaña inactiva, corte de red).
+  useEffect(() => {
+    if (!reservation.id || reservation.status !== 'active') return
+
+    let cancelled = false
+    const checkReservation = async () => {
+      try {
+        const data = await fetchReservationStatus(
+          reservation.id,
+          cartTokenRef.current,
+        )
+        if (cancelled || !data) return
+        if (data.status !== 'active') {
+          setReservation((current) =>
+            current.id === reservation.id
+              ? { ...EMPTY_RESERVATION, status: data.status }
+              : current,
+          )
+          setItems([])
+          resetAttempts()
+          notifyAvailabilityChange()
+        }
+      } catch {
+        // Ignorar errores de red en el respaldo.
+      }
+    }
+
+    checkReservation()
+    const timer = window.setInterval(checkReservation, 30000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservation.id, reservation.status, cartTokenRef.current])
+
   const reserveItems = useCallback(async () => {
     if (!items.length) return false
 
