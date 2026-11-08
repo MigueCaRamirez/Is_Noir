@@ -121,7 +121,7 @@
 .admin-session small {
   margin-top: 1px;
   color: rgba(197, 198, 200, 0.45);
-  font-size: 8.5px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -205,7 +205,7 @@
   min-height: 42px;
   padding: 11px 18px;
   border: 1px solid transparent;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.16em;
   line-height: 1.2;
@@ -281,7 +281,7 @@
 
 .admin-stat__label {
   color: rgba(243, 238, 232, 0.44);
-  font-size: 7px;
+  font-size: 9px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -362,7 +362,7 @@
   outline: 0;
   background: transparent;
   color: #f3eee8;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.03em;
 }
 
@@ -385,7 +385,7 @@
   appearance: none;
   background: #171315;
   color: rgba(243, 238, 232, 0.6);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.08em;
 }
 
@@ -405,7 +405,7 @@
   min-height: 33px;
   padding: 0 10px;
   color: rgba(243, 238, 232, 0.45);
-  font-size: 7px;
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   transition: background-color 0.25s ease, color 0.25s ease;
@@ -532,7 +532,7 @@
   padding: 4px 7px;
   border: 1px solid rgba(197, 198, 200, 0.18);
   color: rgba(243, 238, 232, 0.62);
-  font-size: 8.5px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   line-height: 1.2;
   text-transform: uppercase;
@@ -599,7 +599,7 @@
   padding: 5px 8px;
   border: 1px solid rgba(197, 198, 200, 0.2);
   color: rgba(243, 238, 232, 0.55);
-  font-size: 8.5px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   transition: border-color 0.25s ease, color 0.25s ease, background-color 0.25s ease;
@@ -812,7 +812,7 @@
 .admin-field > span,
 .admin-field__label {
   color: rgba(243, 238, 232, 0.46);
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 400;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -828,7 +828,7 @@
   outline: 0;
   background: #141113;
   color: #f3eee8;
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.02em;
   transition: border-color 0.25s ease;
 }
@@ -968,7 +968,7 @@
 }
 
 .admin-draft-toggle strong {
-  font-size: 8.5px;
+  font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.06em;
 }
@@ -976,7 +976,7 @@
 .admin-draft-toggle small {
   margin-top: 2px;
   color: rgba(243, 238, 232, 0.35);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .admin-draft-toggle > svg {
@@ -989,7 +989,7 @@
   align-items: flex-start;
   gap: 6px;
   color: rgba(243, 238, 232, 0.32);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.6;
 }
 
@@ -1005,7 +1005,7 @@
   border: 1px solid rgba(198, 100, 111, 0.4);
   background: rgba(168, 75, 86, 0.08);
   color: #e8a2ab;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.5;
 }
 
@@ -1046,7 +1046,7 @@
 
 .admin-field > small {
   color: rgba(243, 238, 232, 0.28);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.5;
 }
 
@@ -1061,7 +1061,7 @@
   padding: 3px 6px;
   background: rgba(185, 160, 217, 0.16);
   color: #cbb9e2;
-  font-size: 8.5px;
+  font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1135,7 +1135,7 @@
 
 .admin-news-card__meta > span {
   color: rgba(243, 238, 232, 0.3);
-  font-size: 7px;
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }

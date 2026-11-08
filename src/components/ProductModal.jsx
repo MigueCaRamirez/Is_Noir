@@ -429,47 +429,61 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
                 </div>
               ) : (
                 <div className="size-allocation">
-                  {sizes.map((size) => {
-                    const sizeStock = getSizeStock(product, size)
-                    const assigned = Number(allocations[size]) || 0
-                    return (
-                      <div
-                        className={`size-allocation__row ${sizeStock < 1 ? 'is-sold-out' : ''}`}
-                        key={size}
-                      >
-                        <div className="size-allocation__label">
-                          <strong>{size}</strong>
-                          <span>{sizeStock > 0 ? `${sizeStock} disponibles` : 'Agotada'}</span>
-                        </div>
-                        <div className="size-allocation__control">
-                          <button
-                            type="button"
-                            onClick={() => adjustAllocation(size, -1)}
-                            disabled={assigned <= 0}
-                            aria-label={`Restar una unidad de talla ${size}`}
-                          >
-                            <Minus size={13} />
-                          </button>
-                          <span>{assigned}</span>
-                          <button
-                            type="button"
-                            onClick={() => adjustAllocation(size, 1)}
-                            disabled={assigned >= sizeStock || allocatedTotal >= quantity}
-                            aria-label={`Sumar una unidad de talla ${size}`}
-                          >
-                            <Plus size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  <p
-                    className={`size-allocation__summary ${allocatedTotal === quantity ? 'is-complete' : ''}`}
-                  >
+                  <p className="size-allocation__summary">
                     {allocatedTotal === quantity
                       ? `${quantity} unidad(es) asignadas`
-                      : `Asigna ${Math.max(0, quantity - allocatedTotal)} unidad(es) más`}
+                      : `Faltan ${Math.max(0, quantity - allocatedTotal)} unidad(es) por asignar`}
                   </p>
+                  <div className="size-allocation__grid">
+                    {sizes.map((size) => {
+                      const sizeStock = getSizeStock(product, size)
+                      const assigned = Number(allocations[size]) || 0
+                      const canAdd = assigned < sizeStock && allocatedTotal < quantity
+                      const canRemove = assigned > 0
+                      return (
+                        <div
+                          className={`size-allocation__card ${
+                            sizeStock < 1 ? 'is-sold-out' : ''
+                          } ${assigned > 0 ? 'has-allocation' : ''}`}
+                          key={size}
+                        >
+                          <div className="size-allocation__card-head">
+                            <span className="size-allocation__size">{size}</span>
+                            <span
+                              className={`size-allocation__stock ${
+                                sizeStock < 1 ? 'is-sold-out' : ''
+                              }`}
+                            >
+                              {sizeStock > 0 ? `${sizeStock} disponibles` : 'Agotada'}
+                            </span>
+                          </div>
+                          <div className="size-allocation__controls">
+                            <button
+                              type="button"
+                              className="size-allocation__btn size-allocation__btn--minus"
+                              onClick={() => adjustAllocation(size, -1)}
+                              disabled={!canRemove}
+                              aria-label={`Restar una unidad de talla ${size}`}
+                            >
+                              −
+                            </button>
+                            <span className="size-allocation__value">{assigned}</span>
+                            <button
+                              type="button"
+                              className={`size-allocation__btn size-allocation__btn--plus ${
+                                !canAdd ? 'is-disabled' : ''
+                              }`}
+                              onClick={() => adjustAllocation(size, 1)}
+                              disabled={!canAdd}
+                              aria-label={`Sumar una unidad de talla ${size}`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
               <button
@@ -561,9 +575,9 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
             </p>
           </div>
         </div>
-      </div>
 
-      {guideOpen ? <SizeGuideCard guide={guide} onClose={() => setGuideOpen(false)} /> : null}
+        {guideOpen ? <SizeGuideCard guide={guide} onClose={() => setGuideOpen(false)} /> : null}
+      </div>
     </>,
     document.body,
   )

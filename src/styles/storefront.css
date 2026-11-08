@@ -691,7 +691,7 @@
   display: block;
   overflow: hidden;
   color: var(--muted);
-  font-size: 7px;
+  font-size: 9px;
   letter-spacing: 0.18em;
   text-overflow: ellipsis;
   text-transform: uppercase;

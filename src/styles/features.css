@@ -307,7 +307,7 @@
   padding-bottom: 2px;
   border-bottom: 1px solid currentColor;
   color: var(--accent);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -324,7 +324,7 @@
   display: block;
   margin-top: 9px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-align: center;
   text-decoration: underline;
@@ -558,7 +558,7 @@
 
 .journal-archive__head > span:last-child {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -967,7 +967,7 @@
   padding: 3px 5px;
   background: rgba(18, 16, 17, 0.8);
   color: #f3eee8;
-  font-size: 6px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -1051,7 +1051,7 @@
 
 .admin-field__hint {
   color: rgba(243, 238, 232, 0.3);
-  font-size: 7px;
+  font-size: 10px;
   line-height: 1.5;
 }
 
@@ -1066,7 +1066,7 @@
   border: 1px solid rgba(197, 198, 200, 0.14);
   background: rgba(20, 17, 19, 0.55);
   color: rgba(243, 238, 232, 0.4);
-  font-size: 7px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1154,7 +1154,7 @@
   align-items: center;
   gap: 6px;
   color: rgba(243, 238, 232, 0.55);
-  font-size: 7px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -1222,7 +1222,7 @@
   padding: 4px 6px;
   border: 1px solid rgba(185, 160, 217, 0.35);
   color: #cbb9e2;
-  font-size: 6px;
+  font-size: 10px;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -1323,11 +1323,11 @@
 
 .admin-reservation__item span {
   color: rgba(243, 238, 232, 0.35);
-  font-size: 7px;
+  font-size: 10px;
 }
 
 .admin-reservation__item > b {
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.03em;
   white-space: nowrap;
@@ -1796,7 +1796,7 @@ a.floating-links__item:focus-visible {
 .floating-links__soon {
   margin-left: auto;
   color: var(--text-soft);
-  font-size: 7px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   white-space: nowrap;
 }
@@ -1870,7 +1870,7 @@ a.floating-links__item:focus-visible {
   background: transparent;
   color: rgba(243, 238, 232, 0.42);
   font-family: var(--font-sans);
-  font-size: 7px;
+  font-size: 10px;
   letter-spacing: 0.11em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1901,7 +1901,7 @@ a.floating-links__item:focus-visible {
   border-radius: 20px;
   background: #b9a0d9;
   color: #171315;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -1927,7 +1927,7 @@ a.floating-links__item:focus-visible {
   border-radius: 20px;
   background: #b9a0d9;
   color: #171315;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
 }
@@ -1961,7 +1961,7 @@ a.floating-links__item:focus-visible {
 .admin-bell-card p {
   margin-top: 7px;
   color: rgba(243, 238, 232, 0.42);
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.55;
 }
 
@@ -1984,7 +1984,7 @@ a.floating-links__item:focus-visible {
   padding: 2px 4px;
   border: 1px solid rgba(217, 184, 126, 0.32);
   color: #d9b87e;
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   line-height: 1.25;
   text-transform: uppercase;
@@ -2074,7 +2074,7 @@ a.floating-links__item:focus-visible {
   padding: 8px 10px;
   border: 1px solid rgba(197, 198, 200, 0.12);
   color: rgba(243, 238, 232, 0.4);
-  font-size: 7px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -2194,7 +2194,7 @@ a.floating-links__item:focus-visible {
   padding: 5px 6px;
   border: 1px solid rgba(197, 198, 200, 0.18);
   color: rgba(243, 238, 232, 0.72);
-  font-size: 7px;
+  font-size: 10px;
   letter-spacing: 0.05em;
 }
 
@@ -2216,7 +2216,7 @@ a.floating-links__item:focus-visible {
 
 .admin-taxonomy-empty {
   color: rgba(243, 238, 232, 0.28);
-  font-size: 7px;
+  font-size: 10px;
   line-height: 1.5;
 }
 
@@ -2235,7 +2235,7 @@ a.floating-links__item:focus-visible {
   border: 1px solid rgba(197, 198, 200, 0.16);
   background: #141113;
   color: #f3eee8;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .admin-taxonomy-form input:focus {
