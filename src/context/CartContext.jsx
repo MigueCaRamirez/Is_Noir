@@ -99,7 +99,7 @@ function readBlockUntil() {
   }
 }
 
-function writeBlockUntil(timestamp: number) {
+function writeBlockUntil(timestamp) {
   try {
     if (timestamp > Date.now()) {
       window.localStorage.setItem(BLOCK_UNTIL_KEY, String(timestamp))
