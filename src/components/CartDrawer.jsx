@@ -298,7 +298,7 @@ export default function CartDrawer({ onGoToShop }) {
                   <ShoppingBag size={17} strokeWidth={1.5} />
                   Pedido confirmado
                 </button>
-              ) : isBlocked() ? (
+              ) : isBlocked ? (
                 <button type="button" className="button-primary cart-whatsapp" disabled>
                   <Clock3 size={17} strokeWidth={1.5} />
                   Límite alcanzado · Vuelve en {Math.ceil(
