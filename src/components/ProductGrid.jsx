@@ -290,14 +290,27 @@ export default function ProductGrid({
           </div>
         ) : (
           <div className="catalog-message">
-            <SearchX size={40} strokeWidth={1} />
-            <h3>No encontramos esa pieza</h3>
-            <p>Prueba otra categoría, colección o término de búsqueda.</p>
-            {hasActiveFilters ? (
-              <button type="button" className="button-outline" onClick={resetFilters}>
-                Ver todas las piezas
-              </button>
-            ) : null}
+            {searchQuery.trim() ? (
+              <>
+                <SearchX size={40} strokeWidth={1} />
+                <h3>No encontramos esa pieza</h3>
+                <p>Prueba otra categoría, colección o término de búsqueda.</p>
+                {hasActiveFilters ? (
+                  <button type="button" className="button-outline" onClick={resetFilters}>
+                    Ver todas las piezas
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Butterfly className="catalog-message__butterfly" />
+                <h3>El atelier está tomando un respiro</h3>
+                <p>
+                  Todavía no hay piezas disponibles en esta selección. Vuelve pronto para descubrir
+                  lo nuevo del atelier.
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

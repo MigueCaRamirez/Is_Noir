@@ -157,7 +157,7 @@
   display: block;
   margin-top: 5px;
   color: var(--muted);
-  font-size: 7.5px;
+  font-size: 9px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
 }
@@ -438,6 +438,67 @@
   text-transform: uppercase;
 }
 
+.catalog-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 220px;
+  max-width: 320px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.catalog-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.catalog-search svg {
+  flex: 0 0 auto;
+  margin-right: 10px;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.catalog-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.catalog-search input::placeholder {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.catalog-search__clear {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.catalog-search__clear:hover {
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  color: var(--text);
+}
+
 .search-active {
   display: flex;
   flex-wrap: wrap;
@@ -449,7 +510,7 @@
   border-left: 2px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 6%, transparent);
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .search-active strong {
@@ -458,7 +519,7 @@
 
 .search-active button {
   color: var(--accent);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -735,7 +796,7 @@
   max-width: 360px;
   margin-bottom: 22px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .catalog-message__technical {
@@ -743,7 +804,7 @@
   padding: 9px 12px;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--accent) 6%, transparent);
-  font-size: 9px !important;
+  font-size: 11px !important;
   letter-spacing: 0.02em;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -1091,12 +1152,13 @@
   outline: 0;
   background: transparent;
   color: var(--ivory);
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.05em;
 }
 
 .newsletter-form input::placeholder {
   color: rgba(244, 239, 232, 0.45);
+  font-size: 12px;
 }
 
 .newsletter-form button {

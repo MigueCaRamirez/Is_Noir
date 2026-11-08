@@ -170,7 +170,7 @@
 .about-values__head > p {
   max-width: 340px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.8;
   text-align: right;
 }
@@ -624,7 +624,7 @@
 
   .page-masthead__copy,
   .about-intro__copy p {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .about-intro {

@@ -154,7 +154,7 @@
   outline: 0;
   background: transparent;
   color: var(--text);
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   text-align: center;
   appearance: textfield;
@@ -285,7 +285,7 @@
 .cart-reservation small {
   grid-column: 1 / -1;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .cart-reservation--active {
@@ -616,7 +616,7 @@
 .journal-row__body > span {
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -918,7 +918,7 @@
 .error-fallback > p {
   max-width: 500px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.85;
 }
 
@@ -933,7 +933,7 @@
 .error-fallback > small {
   margin-top: 22px;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.08em;
 }
 
@@ -1025,14 +1025,14 @@
 
 .admin-image-add strong {
   color: rgba(243, 238, 232, 0.68);
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .admin-image-add small {
-  font-size: 6.5px;
+  font-size: 8.5px;
 }
 
 .admin-image-url {
@@ -1114,7 +1114,7 @@
 
 .admin-news-form__calendar strong,
 .admin-size-guide-form__note strong {
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.06em;
 }
@@ -1122,7 +1122,7 @@
 .admin-news-form__calendar small,
 .admin-size-guide-form__note small {
   color: rgba(243, 238, 232, 0.36);
-  font-size: 7px;
+  font-size: 9px;
   line-height: 1.5;
 }
 
@@ -1246,7 +1246,7 @@
 
 .admin-reservation__head small {
   color: rgba(243, 238, 232, 0.32);
-  font-size: 6.5px;
+  font-size: 8.5px;
   letter-spacing: 0.06em;
 }
 
@@ -1433,7 +1433,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: rgba(243, 238, 232, 0.4);
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.55;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1443,7 +1443,7 @@
   display: block;
   margin-top: 7px;
   color: rgba(243, 238, 232, 0.27);
-  font-size: 6.5px;
+  font-size: 8.5px;
   letter-spacing: 0.04em;
 }
 
@@ -1977,14 +1977,14 @@ a.floating-links__item:focus-visible {
 .admin-stock--readonly span {
   min-width: 0;
   border: 0;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .admin-low-badge {
   padding: 2px 4px;
   border: 1px solid rgba(217, 184, 126, 0.32);
   color: #d9b87e;
-  font-size: 6px;
+  font-size: 8px;
   letter-spacing: 0.08em;
   line-height: 1.25;
   text-transform: uppercase;
@@ -2029,14 +2029,14 @@ a.floating-links__item:focus-visible {
 
 .admin-toggle-row strong {
   color: #f3eee8;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.05em;
 }
 
 .admin-toggle-row small {
   color: rgba(243, 238, 232, 0.35);
-  font-size: 7px;
+  font-size: 9px;
   line-height: 1.45;
 }
 

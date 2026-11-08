@@ -121,7 +121,7 @@
 .admin-session small {
   margin-top: 1px;
   color: rgba(197, 198, 200, 0.45);
-  font-size: 6.5px;
+  font-size: 8.5px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -298,7 +298,7 @@
 .admin-stat small {
   margin-top: 5px;
   color: rgba(243, 238, 232, 0.35);
-  font-size: 7.5px;
+  font-size: 9.5px;
   letter-spacing: 0.04em;
 }
 
@@ -522,7 +522,7 @@
 .admin-product-row__text small {
   margin-top: 3px;
   color: rgba(243, 238, 232, 0.24);
-  font-size: 6.5px;
+  font-size: 8.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -532,7 +532,7 @@
   padding: 4px 7px;
   border: 1px solid rgba(197, 198, 200, 0.18);
   color: rgba(243, 238, 232, 0.62);
-  font-size: 6.5px;
+  font-size: 8.5px;
   letter-spacing: 0.1em;
   line-height: 1.2;
   text-transform: uppercase;
@@ -580,7 +580,7 @@
   min-width: 29px;
   border-right: 1px solid rgba(197, 198, 200, 0.12);
   border-left: 1px solid rgba(197, 198, 200, 0.12);
-  font-size: 10px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -599,7 +599,7 @@
   padding: 5px 8px;
   border: 1px solid rgba(197, 198, 200, 0.2);
   color: rgba(243, 238, 232, 0.55);
-  font-size: 6.5px;
+  font-size: 8.5px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   transition: border-color 0.25s ease, color 0.25s ease, background-color 0.25s ease;
@@ -661,13 +661,13 @@
 .admin-state p {
   max-width: 380px;
   margin-bottom: 17px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .admin-loading {
   flex-direction: row;
   gap: 9px;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -680,7 +680,7 @@
   gap: 12px;
   padding: 22px 2px 0;
   color: rgba(243, 238, 232, 0.28);
-  font-size: 7px;
+  font-size: 9px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -708,7 +708,7 @@
   border: 1px solid rgba(197, 198, 200, 0.2);
   background: #201a1d;
   color: #f3eee8;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
   box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.65);
 }
@@ -911,14 +911,14 @@
 
 .admin-upload__empty strong {
   color: rgba(243, 238, 232, 0.7);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .admin-upload__empty small {
-  font-size: 7.5px;
+  font-size: 9.5px;
   letter-spacing: 0.04em;
 }
 
@@ -933,7 +933,7 @@
   border: 1px solid rgba(243, 238, 232, 0.28);
   background: rgba(18, 16, 17, 0.82);
   color: #f3eee8;
-  font-size: 7px;
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -976,7 +976,7 @@
 .admin-draft-toggle small {
   margin-top: 2px;
   color: rgba(243, 238, 232, 0.35);
-  font-size: 7px;
+  font-size: 9px;
 }
 
 .admin-draft-toggle > svg {
@@ -989,7 +989,7 @@
   align-items: flex-start;
   gap: 6px;
   color: rgba(243, 238, 232, 0.32);
-  font-size: 7px;
+  font-size: 9px;
   line-height: 1.6;
 }
 
@@ -1046,7 +1046,7 @@
 
 .admin-field > small {
   color: rgba(243, 238, 232, 0.28);
-  font-size: 7px;
+  font-size: 9px;
   line-height: 1.5;
 }
 
@@ -1061,7 +1061,7 @@
   padding: 3px 6px;
   background: rgba(185, 160, 217, 0.16);
   color: #cbb9e2;
-  font-size: 6.5px;
+  font-size: 8.5px;
   font-weight: 400;
   letter-spacing: 0.14em;
   text-transform: uppercase;

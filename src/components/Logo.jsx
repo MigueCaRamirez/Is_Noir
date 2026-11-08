@@ -1,47 +1,116 @@
-import { useId } from 'react'
 import { assetUrl } from '../lib/format'
 
 export function Butterfly({ className = '' }) {
-  const rawId = useId()
-  const gradientId = `butterfly-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`
-
   return (
     <svg
-      viewBox="0 0 140 112"
+      viewBox="0 0 200 200"
       role="presentation"
       aria-hidden="true"
       className={className}
       fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
       <defs>
-        <linearGradient id={gradientId} x1="18" y1="12" x2="116" y2="100" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#E8DDF4" />
-          <stop offset=".32" stopColor="#B9A0D9" />
-          <stop offset=".68" stopColor="#7B547A" />
-          <stop offset="1" stopColor="#2A1720" />
+        <linearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+          <stop offset="0" stopColor="#A02A2A" />
+          <stop offset="0.45" stopColor="#C44E4E" />
+          <stop offset="1" stopColor="#7B1E1E" />
         </linearGradient>
+        <filter id="wingSoft" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur" />
+          <feOffset in="blur" dx="0" dy="4" result="offsetBlur" />
+          <feComponentTransfer>
+            <feFuncA type="linear" slope="0.35" />
+          </feComponentTransfer>
+          <feMerge>
+            <feMergeNode />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
-      <g className="butterfly__wings" fill={`url(#${gradientId})`} stroke="currentColor" strokeWidth="1.1">
-        <path d="M67 48C53 15 20 5 10 21c-11 18 19 34 53 35" opacity=".96" />
-        <path d="M73 48c14-33 47-43 57-27 11 18-19 34-53 35" opacity=".96" />
-        <path d="M66 57C44 55 22 65 26 82c3 14 27 16 42-6" opacity=".9" />
-        <path d="M74 57c22-2 44 8 40 25-3 14-27 16-42-6" opacity=".9" />
-      </g>
-      <g stroke="currentColor" strokeWidth=".85" opacity=".55">
-        <path d="M62 42C46 29 27 18 16 18M60 51C42 48 28 51 20 59" />
-        <path d="M78 42c16-13 35-24 46-24M80 51c18-3 32 0 40 8" />
-        <path d="M58 60c-12 1-22 7-25 15M82 60c12 1 22 7 25 15" />
-      </g>
+
+      <!-- Cuerpo central -->
       <path
-        d="M70 36c-2 15-2 34 0 52M67 34c-5-8-11-13-18-17M73 34c5-8 11-13 18-17"
+        d="M100 40 Q100 100 100 160"
+        fill="none"
         stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
+        strokeWidth="2.2"
+        opacity="0.9"
       />
-      <circle cx="47" cy="15" r="1.7" fill="currentColor" />
-      <circle cx="93" cy="15" r="1.7" fill="currentColor" />
-      <circle cx="42" cy="73" r="1.25" fill="currentColor" opacity=".65" />
-      <circle cx="98" cy="73" r="1.25" fill="currentColor" opacity=".65" />
+
+      <!-- Ala superior izquierda -->
+      <path
+        d="M100 55 C60 20 20 30 25 70 C30 90 70 95 100 60"
+        fill="url(#wingGrad)"
+        opacity="0.92"
+        filter="url(#wingSoft)"
+      />
+      <path
+        d="M100 55 C80 35 40 40 35 75 C45 95 85 90 100 60"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        opacity="0.7"
+      />
+
+      <!-- Ala superior derecha -->
+      <path
+        d="M100 55 C140 20 180 30 175 70 C170 90 130 95 100 60"
+        fill="url(#wingGrad)"
+        opacity="0.92"
+        filter="url(#wingSoft)"
+      />
+      <path
+        d="M100 55 C120 35 160 40 165 75 C155 95 115 90 100 60"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        opacity="0.7"
+      />
+
+      <!-- Ala inferior izquierda -->
+      <path
+        d="M100 60 C70 80 40 110 45 140 C50 170 90 150 100 110"
+        fill="url(#wingGrad)"
+        opacity="0.88"
+        filter="url(#wingSoft)"
+      />
+      <path
+        d="M100 60 C80 75 55 100 50 135 C55 160 85 145 100 110"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        opacity="0.65"
+      />
+
+      <!-- Ala inferior derecha -->
+      <path
+        d="M100 60 C130 80 160 110 155 140 C150 170 110 150 100 110"
+        fill="url(#wingGrad)"
+        opacity="0.88"
+        filter="url(#wingSoft)"
+      />
+      <path
+        d="M100 60 C120 75 145 100 150 135 C145 160 115 145 100 110"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        opacity="0.65"
+      />
+
+      <!-- Antenas -->
+      <path d="M96 45 Q85 25 75 15" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.8" />
+      <path d="M104 45 Q115 25 125 15" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.8" />
+
+      <!-- Detalles de venas -->
+      <g stroke="currentColor" strokeWidth="1" opacity="0.5">
+        <path d="M100 60 Q85 50 70 55M100 60 Q115 50 130 55" />
+        <path d="M100 75 Q90 85 80 95M100 75 Q110 85 120 95" />
+        <path d="M100 95 Q95 115 90 130M100 95 Q105 115 110 130" />
+      </g>
     </svg>
   )
 }
