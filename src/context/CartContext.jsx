@@ -294,7 +294,6 @@ export function CartProvider({ children }) {
                   : current,
               )
               setItems([])
-              resetAttempts()
               notifyAvailabilityChange()
             }
           },
@@ -336,7 +335,6 @@ export function CartProvider({ children }) {
               : current,
           )
           setItems([])
-          resetAttempts()
           notifyAvailabilityChange()
         }
       } catch {
@@ -371,7 +369,6 @@ export function CartProvider({ children }) {
               : current,
           )
           setItems([])
-          resetAttempts()
           notifyAvailabilityChange()
         }
       } catch {
@@ -465,7 +462,6 @@ export function CartProvider({ children }) {
   }, [items, isBlocked])
 
   const clearCart = useCallback(() => {
-    resetAttempts()
     setItems([])
   }, [])
 
