@@ -233,12 +233,6 @@ export function CartProvider({ children }) {
   }, [reservation])
 
   useEffect(() => {
-    if (storedReservationRef.current?.id && readAttempts() < 1) {
-      writeAttempts(1)
-    }
-  }, [])
-
-  useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
     } catch {
@@ -247,145 +241,14 @@ export function CartProvider({ children }) {
   }, [items])
 
   const itemsSignature = useMemo(
-    () =>
-      items
-        .map((item) => `${item.productoId}:${item.talla}:${item.cantidad}`)
-        .sort()
-        .join('|'),
+    () => items.map((item) => `${item.productoId}:${item.talla}:${item.cantidad}`).sort().join('|'),
     [items],
   )
 
-  // Valida que los items del carrito sigan estando disponibles (no borrador, stock > 0).
-  // Se ejecuta al montar y cuando cambian los items o la disponibilidad.
-  useEffect(() => {
-    let cancelled = false
-
-    const validateItems = async () => {
-      if (!items.length || !supabase) return
-
-      try {
-        const ids = items.map((item) => item.productoId)
-
-        const { data: products, error } = await supabase
-          .from('productos')
-          .select('id, borrador, stock, tallas_stock, talla_unica')
-          .in('id', ids)
-
-        if (error || !products || cancelled) return
-
-        const unavailable = new Set()
-        for (const product of products) {
-          if (product.borrador) {
-            unavailable.add(product.id)
-            continue
-          }
-          const stock = product.talla_unica
-            ? Number(product.stock || 0)
-            : Object.values(product.tallas_stock || {}).reduce(
-                (sum, v) => sum + Number(v || 0),
-                0,
-              )
-          if (stock <= 0) unavailable.add(product.id)
-        }
-
-        if (unavailable.size > 0 && !cancelled) {
-          setItems((current) =>
-            current.filter((item) => !unavailable.has(item.productoId)),
-          )
-          notifyAvailabilityChange()
-        }
-      } catch {
-        // Si falla la validación, dejamos los items como están para no bloquear al usuario.
-      }
-    }
-
-    validateItems()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemsSignature])
-
-  // Suscripción en tiempo real: si el admin pone un producto como borrador o
-  // confirma una reserva como vendida, lo quitamos del carrito del cliente.
-  useEffect(() => {
-    if (!supabase) return undefined
-
-    let channel = null
-    try {
-      channel = supabase
-        .channel('isnoir-cart-live')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'productos',
-            filter: 'borrador=eq.true',
-          },
-          (payload) => {
-            const productId = String(payload.new?.id)
-            if (!productId) return
-            setItems((current) => {
-              const next = current.filter((item) => item.productoId !== productId)
-              if (next.length !== current.length) {
-                notifyAvailabilityChange()
-              }
-              return next
-            })
-          },
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'reservas',
-            filter: 'status=eq.completed',
-          },
-          (payload) => {
-            const reservationId = String(payload.new?.id)
-            if (!reservationId || reservationId !== reservation.id) return
-            setReservation((current) =>
-              current.id === reservationId
-                ? { ...EMPTY_RESERVATION, status: 'completed' }
-                : current,
-            )
-            setItems([])
-            resetAttempts()
-            notifyAvailabilityChange()
-          },
-        )
-        .subscribe()
-    } catch {
-      // Si falla la suscripción, seguimos funcionando sin tiempo real.
-    }
-
-    return () => {
-      if (channel && supabase) {
-        try {
-          supabase.removeChannel(channel)
-        } catch {
-          // Ignorar errores al limpiar
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reservation.id])
-
   const reserveItems = useCallback(async () => {
-    if (!items.length) {
-      setError('Tu selección está vacía.')
-      return false
-    }
+    if (!items.length) return false
 
-    if (isBlocked()) {
-      const minutes = remainingBlockMinutes()
-      setError(
-        `Has alcanzado el límite de apartados. Intenta de nuevo en ${minutes} minuto(s).`,
-      )
-      return false
-    }
+    if (isBlocked()) return false
 
     const previous = reservationRef.current
     const previousActive =
@@ -400,8 +263,7 @@ export function CartProvider({ children }) {
       setReservation({
         ...EMPTY_RESERVATION,
         status: 'limit',
-        error:
-          'Alcanzaste el límite de 3 apartados de esta sesión. Intenta de nuevo en 12 horas.',
+        error: 'Alcanzaste el límite de 3 apartados de esta sesión. Intenta de nuevo en 12 horas.',
       })
       return false
     }
@@ -457,134 +319,49 @@ export function CartProvider({ children }) {
       notifyAvailabilityChange()
       return false
     }
-  }, [items, isBlocked, remainingBlockMinutes])
+  }, [items, isBlocked])
 
   const clearCart = useCallback(() => {
     resetAttempts()
     setItems([])
   }, [])
 
-  useEffect(() => {
-    if (reservation.status !== 'active' || !reservation.id || !reservation.expiresAt) {
-      return undefined
+  const openCart = useCallback(() => setIsCartOpen(true), [])
+  const closeCart = useCallback(() => setIsCartOpen(false), [])
+  const renewReservation = useCallback(() => {
+    setSyncNonce((current) => current + 1)
+  }, [])
+
+  const releaseReservation = useCallback(async () => {
+    const current = reservationRef.current
+    if (!current.id) {
+      setReservation(EMPTY_RESERVATION)
+      return
     }
 
-    const reservationId = reservation.id
-    let expired = false
-
-    const tick = () => {
-      const seconds = remainingSeconds(reservation.expiresAt)
-      setReservation((current) => {
-        if (current.id !== reservationId || current.status !== 'active') return current
-        return { ...current, secondsLeft: seconds }
-      })
-
-      if (seconds === 0 && !expired) {
-        expired = true
-        setReservation((current) =>
-          current.id === reservationId
-            ? { ...current, status: 'expired', secondsLeft: 0, syncing: false }
-            : current,
-        )
-        expireReservations().then(notifyAvailabilityChange).catch(() => {})
-      }
+    try {
+      await cancelReservation(current.id, cartTokenRef.current)
+      setReservation((entry) =>
+        entry.id === current.id
+          ? {
+              ...entry,
+              status: 'released',
+              secondsLeft: 0,
+              syncing: false,
+              error: '',
+            }
+          : entry,
+      )
+      notifyAvailabilityChange()
+    } catch (error) {
+      setReservation((entry) =>
+        entry.id === current.id
+          ? { ...entry, error: error.message || 'No pudimos liberar el apartado.' }
+          : entry,
+      )
+      throw error
     }
-
-    tick()
-    const timer = window.setInterval(tick, 1000)
-    return () => window.clearInterval(timer)
-  }, [reservation.id, reservation.status, reservation.expiresAt])
-
-  useEffect(() => {
-    if (reservation.status !== 'active' || !reservation.id) return undefined
-
-    const reservationId = reservation.id
-    let stopped = false
-
-    const checkStatus = async () => {
-      if (stopped) return
-      const data = await fetchReservationStatus(reservationId, cartTokenRef.current)
-      if (stopped || !data) return
-
-      if (data.status === 'cancelled') {
-        setReservation((current) =>
-          current.id === reservationId
-            ? {
-                ...current,
-                status: 'released',
-                secondsLeft: 0,
-                syncing: false,
-                error: '',
-              }
-            : current,
-        )
-        notifyAvailabilityChange()
-        return
-      }
-
-      if (data.status === 'completed') {
-        setReservation((current) =>
-          current.id === reservationId
-            ? {
-                ...current,
-                status: 'completed',
-                secondsLeft: 0,
-                syncing: false,
-                error: '',
-              }
-            : current,
-        )
-        notifyAvailabilityChange()
-        return
-      }
-
-      if (data.status === 'expired') {
-        setReservation((current) =>
-          current.id === reservationId
-            ? {
-                ...current,
-                status: 'expired',
-                secondsLeft: 0,
-                syncing: false,
-              }
-            : current,
-        )
-        notifyAvailabilityChange()
-        return
-      }
-
-      if (data.status === 'active' && data.expires_at) {
-        const seconds = remainingSeconds(data.expires_at)
-        setReservation((current) => {
-          if (current.id !== reservationId || current.status !== 'active') return current
-          if (seconds <= 0) return { ...current, status: 'expired', secondsLeft: 0 }
-          return {
-            ...current,
-            expiresAt: data.expires_at,
-            secondsLeft: seconds,
-            syncing: false,
-          }
-        })
-      }
-    }
-
-    checkStatus()
-    const timer = window.setInterval(checkStatus, 5000)
-    const onAvailability = () => checkStatus()
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') checkStatus()
-    }
-
-    window.addEventListener('isnoir:availability-changed', onAvailability)
-    document.addEventListener('visibilitychange', onVisibility)
-
-    return () => {
-      stopped = true
-      window.clearInterval(timer)
-      window.removeEventListener('isnoir:availability-changed', onAvailability)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [reservation.id, reservation.status])
+  }, [])
 
   const addItems = useCallback(
     (product, allocations = {}) => {
@@ -676,49 +453,9 @@ export function CartProvider({ children }) {
     setItems((current) => current.filter((item) => item.id !== lineId))
   }, [])
 
-  const openCart = useCallback(() => setIsCartOpen(true), [])
-  const closeCart = useCallback(() => setIsCartOpen(false), [])
-  const renewReservation = useCallback(() => {
-    setSyncNonce((current) => current + 1)
-  }, [])
-
-  const releaseReservation = useCallback(async () => {
-    const current = reservationRef.current
-    if (!current.id) {
-      setReservation(EMPTY_RESERVATION)
-      return
-    }
-
-    try {
-      await cancelReservation(current.id, cartTokenRef.current)
-      setReservation((entry) =>
-        entry.id === current.id
-          ? {
-              ...entry,
-              status: 'released',
-              secondsLeft: 0,
-              syncing: false,
-              error: '',
-            }
-          : entry,
-      )
-      notifyAvailabilityChange()
-    } catch (error) {
-      setReservation((entry) =>
-        entry.id === current.id
-          ? { ...entry, error: error.message || 'No pudimos liberar el apartado.' }
-          : entry,
-      )
-      throw error
-    }
-  }, [])
-
   const subtotal = useMemo(
     () =>
-      items.reduce(
-        (acc, item) => acc + Number(item.precio) * Number(item.cantidad),
-        0,
-      ),
+      items.reduce((acc, item) => acc + Number(item.precio) * Number(item.cantidad), 0),
     [items],
   )
 
