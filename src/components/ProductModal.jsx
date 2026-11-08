@@ -319,14 +319,6 @@ export default function ProductModal({ product, onClose, sizeGuide }) {
                 </span>
               </div>
 
-              <p className="size-picker__summary">
-                {single
-                  ? `Stock disponible: ${stock}`
-                  : remainingStock > 0
-                    ? `Faltan ${remainingStock} unidad(es) por asignar`
-                    : `${allocatedTotal} unidad(es) asignadas`}
-              </p>
-
               {single ? (
                 <p className="size-picker__hint">Esta pieza se ofrece en talla única.</p>
               ) : (
