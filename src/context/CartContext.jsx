@@ -14,6 +14,7 @@ import {
   cancelReservation,
   createReservation,
   expireReservations,
+  fetchReservationStatus,
   FINAL_RESERVATION_MINUTES,
   getCartToken,
   INITIAL_RESERVATION_MINUTES,
@@ -156,14 +157,16 @@ function readStoredReservation(cartToken) {
 
     const secondsLeft = remainingSeconds(expiresAt)
     const storedStatus = String(parsed.status || 'active')
-    const status =
-      storedStatus === 'active' && secondsLeft <= 0 ? 'expired' : storedStatus
+
+    // Solo restaurar reservas que sigan siendo 'active' y no hayan expirado.
+    // Si el admin canceló o vendió la reserva, no la restauramos al recargar.
+    if (storedStatus !== 'active' || secondsLeft <= 0) return null
 
     return {
       id: parsed.id,
-      status,
+      status: storedStatus,
       expiresAt,
-      secondsLeft: status === 'active' ? secondsLeft : 0,
+      secondsLeft,
       total: Number(parsed.total) || 0,
       error: '',
       syncing: false,
@@ -312,6 +315,41 @@ export function CartProvider({ children }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservation.id])
+
+  // Al montar, verificar que la reserva restaurada de localStorage siga siendo 'active' en la BD.
+  // Si el admin canceló o vendió mientras el cliente estaba fuera, limpiamos el carrito.
+  useEffect(() => {
+    if (!reservation.id || reservation.status !== 'active') return
+
+    let cancelled = false
+    const verifyReservation = async () => {
+      try {
+        const data = await fetchReservationStatus(
+          reservation.id,
+          cartTokenRef.current,
+        )
+        if (cancelled || !data) return
+        if (data.status !== 'active') {
+          setReservation((current) =>
+            current.id === reservation.id
+              ? { ...EMPTY_RESERVATION, status: data.status }
+              : current,
+          )
+          setItems([])
+          resetAttempts()
+          notifyAvailabilityChange()
+        }
+      } catch {
+        // Si falla la verificación, dejamos la reserva como está.
+      }
+    }
+
+    verifyReservation()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservation.id, reservation.status, cartTokenRef.current])
 
   const reserveItems = useCallback(async () => {
     if (!items.length) return false
