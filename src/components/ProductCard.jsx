@@ -100,6 +100,9 @@ export default function ProductCard({ product, onSelect }) {
         </span>
         <span className="product-card__name">{product.nombre}</span>
         <span className="product-card__price">{formatCOP(product.precio)}</span>
+        {product.descripcion ? (
+          <p className="product-card__description">{product.descripcion}</p>
+        ) : null}
       </button>
     </article>
   )

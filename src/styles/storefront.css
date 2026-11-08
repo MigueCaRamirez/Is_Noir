@@ -722,8 +722,18 @@
   letter-spacing: 0.07em;
 }
 
+.product-card__description {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+
 .product-card.is-sold-out .product-card__name,
-.product-card.is-sold-out .product-card__price {
+.product-card.is-sold-out .product-card__price,
+.product-card.is-sold-out .product-card__description {
   opacity: 0.55;
 }
 
